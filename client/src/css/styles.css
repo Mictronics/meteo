@@ -1,0 +1,50 @@
+.xWindSpeedGridLines {
+  stroke: lightblue !important;
+  stroke-width: 0.5px;
+}
+
+.yWindSpeedGridLines {
+  stroke: lightblue !important;
+  stroke-width: 0.5px;
+}
+
+.dotHumidity {
+  fill: lawngreen !important;
+}
+
+#window0dB {
+  stroke: red !important;
+  stroke-width: 5px;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+#window10dB {
+  stroke: blue !important;
+  stroke-width: 5px;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+#window12dB {
+  stroke: green !important;
+  stroke-width: 5px;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.charts {
+  display: contents;
+}
+
+d3fc-group.cartesian-chart > .plot-area {
+  min-height: 30vh;
+}
+
+.element-border {
+  border-color: cadetblue;
+  border-style: solid;
+  border-radius: 10px;
+  border-width: medium;
+  margin: 2px;
+}

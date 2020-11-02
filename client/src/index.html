@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en" class="h-100">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="user-scalable=no, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, minimal-ui"
+    />
+    <title>WebMeteo Station</title>
+    <meta name="description" content="Web meteo station for acoustic tests." />
+    <meta name="author" content="Michael Wolf" />
+    <link rel="manifest" href="manifest.json" />
+    <link rel="stylesheet" type="text/css" href="./css/bootstrap.min.css" />
+    <link rel="stylesheet" type="text/css" href="./css/noty.css" />
+    <link rel="stylesheet" type="text/css" href="./css/bootstrap-v4.css" />
+    <link rel="stylesheet" type="text/css" href="./css/styles.css" />
+    <script type="text/javascript" src="./scripts/vendors/noty.min.js"></script>
+    <script type="text/javascript" src="./scripts/vendors/d3.min.js"></script>
+    <script type="text/javascript" src="./scripts/vendors/d3fc.js"></script>
+    <script type="text/javascript" src="./scripts/charts.js"></script>
+  </head>
+  <body class="h-100 m-1">
+    <div class="d-flex flex-row flex-wrap p-1 element-border">
+      <div>Local Time</div>
+      <div>GPS Time</div>
+      <div>GPS Status?</div>
+      <div>Weather Status?</div>
+      <div>Settings</div>
+    </div>
+    <div class="d-flex flex-row flex-wrap p-1 element-border">
+      <div>Record</div>
+      <div>GPS Data</div>
+    </div>
+    <div class="d-flex flex-row flex-wrap justify-content-between">
+      <div class="d-flex flex-column justify-content-around p-1 element-border">
+        <div class="row">
+          <div class="col-5">Temperature [°C]</div>
+          <div class="col-3">0123456789</div>
+          <div class="col-3">0123456789</div>
+        </div>
+        <div class="row">
+          <div class="col-5">Humitity [%]</div>
+          <div class="col-3">0123456789</div>
+          <div class="col-3">0123456789</div>
+        </div>
+        <div class="row">
+          <div class="col-5">Pressure [hPa]</div>
+          <div class="col-3">0123456789</div>
+          <div class="col-3">0123456789</div>
+        </div>
+        <div class="row">
+          <div class="col-5">QFE [hPa]</div>
+          <div class="col-3">0123456789</div>
+          <div class="col-3">0123456789</div>
+        </div>
+        <div class="row">
+          <div class="col-5">QNH [hPa]</div>
+          <div class="col-3">0123456789</div>
+          <div class="col-3">0123456789</div>
+        </div>
+        <div class="row">
+          <div class="col-5">Wind Direction [kts]</div>
+          <div class="col-3">0123456789</div>
+          <div class="col-3">0123456789</div>
+        </div>
+        <div class="row">
+          <div class="col-5">Wind Speed [kts]</div>
+          <div class="col-3">0123456789</div>
+          <div class="col-3">0123456789</div>
+        </div>
+        <div class="row">
+          <div class="col-5">Cross Wind [kts]</div>
+          <div class="col-3">0123456789</div>
+          <div class="col-3">0123456789</div>
+        </div>
+        <div class="row">
+          <div class="col-5">Head Wind [kts]</div>
+          <div class="col-3">0123456789</div>
+          <div class="col-3">0123456789</div>
+        </div>
+        <div class="row">
+          <div class="col-5">Elevation [ft]</div>
+          <div class="col-3">0123456789</div>
+          <div class="col-3">0123456789</div>
+        </div>
+        <div class="row">
+          <div class="col-5">Runway Heading [°]</div>
+          <div class="col-3">0123456789</div>
+          <div class="col-3">0123456789</div>
+        </div>
+      </div>
+      <div
+        class="d-flex flex-column flex-grow-1 justify-content-start p-1 element-border"
+      >
+        <object type="image/svg+xml" data="./images/hsi.svg"></object>
+        <div class="d-flex flex-row justify-content-around">
+          <div class="">Wind Direction [mean]</div>
+          <div class="">Wind Speed [mean]</div>
+        </div>
+        <div class="d-flex flex-row justify-content-around">
+          <div id="windDirectionMean" class="">123</div>
+          <div id="windspeedMean" class="">456</div>
+        </div>
+      </div>
+      <div class="d-flex flex-column flex-grow-1 p-1 element-border">
+        <div id="windspeedChart" class="charts"></div>
+        <div id="humidityChart" class="charts"></div>
+      </div>
+    </div>
+    <script type="text/javascript" src="./scripts/index.js"></script>
+  </body>
+</html>
