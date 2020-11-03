@@ -1,5 +1,5 @@
 const windSpeedData = [];
-//const yExtent = fc.extentLinear().accessors([(d) => d.speed]);
+// const yExtent = fc.extentLinear().accessors([(d) => d.speed]);
 const xExtent = fc.extentDate().accessors([(d) => d.date]);
 
 const windSpeed = fc

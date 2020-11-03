@@ -16,5 +16,19 @@
     "tsc": ">= 4.0.0"
   },
   "main": "./client/index.html",
-  "dependencies": {}
+  "dependencies": {
+    "eslint-config-airbnb": "^18.2.0",
+    "eslint-config-airbnb-base": "^14.2.0",
+    "eslint-plugin-import": "^2.22.1",
+    "eslint-plugin-jsx-a11y": "^6.4.1",
+    "eslint-plugin-react": "^7.21.5",
+    "eslint-plugin-react-hooks": "^4.2.0"
+  },
+  "devDependencies": {
+    "eslint": "^7.12.1"
+  },
+  "scripts": {
+    "start": "npm run dev",
+    "lint": "eslint --ext .js client"
+  }
 }
