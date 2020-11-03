@@ -19,72 +19,61 @@
     <script type="text/javascript" src="./scripts/vendors/d3fc.js"></script>
     <script type="text/javascript" src="./scripts/charts.js"></script>
   </head>
-  <body class="h-100 m-1">
-    <div class="d-flex flex-row flex-wrap p-1 element-border">
-      <div>Local Time</div>
-      <div>GPS Time</div>
-      <div>GPS Status?</div>
-      <div>Weather Status?</div>
-      <div>Settings</div>
-    </div>
-    <div class="d-flex flex-row flex-wrap p-1 element-border">
-      <div>Record</div>
-      <div>GPS Data</div>
-    </div>
+  <body class="m-1 h-100">
     <div class="d-flex flex-row flex-wrap justify-content-between">
       <div class="d-flex flex-column justify-content-around p-1 element-border">
         <div class="row">
-          <div class="col-5">Temperature [°C]</div>
+          <div class="col-5 text-black-50">Temperature [°C]</div>
           <div class="col-3">0123456789</div>
           <div class="col-3">0123456789</div>
         </div>
         <div class="row">
-          <div class="col-5">Humitity [%]</div>
+          <div class="col-5 text-black-50">Humitity [%]</div>
           <div class="col-3">0123456789</div>
           <div class="col-3">0123456789</div>
         </div>
         <div class="row">
-          <div class="col-5">Pressure [hPa]</div>
+          <div class="col-5 text-black-50">Pressure [hPa]</div>
           <div class="col-3">0123456789</div>
           <div class="col-3">0123456789</div>
         </div>
         <div class="row">
-          <div class="col-5">QFE [hPa]</div>
+          <div class="col-5 text-black-50">QFE [hPa]</div>
           <div class="col-3">0123456789</div>
           <div class="col-3">0123456789</div>
         </div>
         <div class="row">
-          <div class="col-5">QNH [hPa]</div>
+          <div class="col-5 text-black-50">QNH [hPa]</div>
           <div class="col-3">0123456789</div>
           <div class="col-3">0123456789</div>
         </div>
         <div class="row">
-          <div class="col-5">Wind Direction [kts]</div>
+          <div class="col-5 text-black-50">Wind Direction [kts]</div>
           <div class="col-3">0123456789</div>
           <div class="col-3">0123456789</div>
         </div>
         <div class="row">
-          <div class="col-5">Wind Speed [kts]</div>
+          <div class="col-5 text-black-50">Wind Speed [kts]</div>
           <div class="col-3">0123456789</div>
           <div class="col-3">0123456789</div>
         </div>
         <div class="row">
-          <div class="col-5">Cross Wind [kts]</div>
+          <div class="col-5 text-black-50">Cross Wind [kts]</div>
           <div class="col-3">0123456789</div>
           <div class="col-3">0123456789</div>
         </div>
         <div class="row">
-          <div class="col-5">Head Wind [kts]</div>
+          <div class="col-5 text-black-50">Head Wind [kts]</div>
           <div class="col-3">0123456789</div>
           <div class="col-3">0123456789</div>
         </div>
         <div class="row">
-          <div class="col-5">Elevation [ft]</div>
+          <div class="col-5 text-black-50">Elevation [ft]</div>
           <div class="col-3">0123456789</div>
           <div class="col-3">0123456789</div>
         </div>
         <div class="row">
-          <div class="col-5">Runway Heading [°]</div>
+          <div class="col-5 text-black-50">Runway Heading [°]</div>
           <div class="col-3">0123456789</div>
           <div class="col-3">0123456789</div>
         </div>
@@ -94,8 +83,8 @@
       >
         <object type="image/svg+xml" data="./images/hsi.svg"></object>
         <div class="d-flex flex-row justify-content-around">
-          <div class="">Wind Direction [mean]</div>
-          <div class="">Wind Speed [mean]</div>
+          <div class="text-black-50">Wind Direction [mean]</div>
+          <div class="text-black-50">Wind Speed [mean]</div>
         </div>
         <div class="d-flex flex-row justify-content-around">
           <div id="windDirectionMean" class="">123</div>
@@ -105,6 +94,63 @@
       <div class="d-flex flex-column flex-grow-1 p-1 element-border">
         <div id="windspeedChart" class="charts"></div>
         <div id="humidityChart" class="charts"></div>
+      </div>
+    </div>
+    <div class="d-flex flex-row flex-wrap justify-content-around">
+      <div class="element-border p-1 text-center">
+        <span class="text-black-50">GPS Information</span>
+        <div class="d-flex flex-row">
+          <ul class="list-group list-group-flush">
+            <li id="gpsLat" class="list-group-item">Lat</li>
+            <li id="gpsLon" class="list-group-item">Lon</li>
+            <li id="gpsAlt" class="list-group-item">Alt</li>
+          </ul>
+          <ul class="list-group list-group-flush">
+            <li id="gpsQuality" class="list-group-item">Quality</li>
+            <li id="gpsSatellites" class="list-group-item">Sats</li>
+            <li id="gpsHDOP" class="list-group-item">HDOP</li>
+          </ul>
+        </div>
+      </div>
+      <div class="element-border p-2">
+        <span class="text-black-50">Record</span>
+        <form class="d-flex flex-row">
+          <div class="pr-1 mb-1">
+            <label class="col-form-label" for="flightNumberInput"
+              >Flight Number</label
+            >
+            <input type="text" class="form-control" id="flightNumberInput" />
+          </div>
+          <div class="pr-1">
+            <label class="col-form-label" for="topNumberInput"
+              >TOP Number</label
+            >
+            <input type="number" class="form-control" id="topNumberInput" />
+          </div>
+        </form>
+        <button id="recordButton" class="btn btn-danger" type="button">
+          Record
+          <span
+            class="spinner-border spinner-border-sm d-none"
+            role="status"
+            aria-hidden="true"
+          ></span>
+        </button>
+      </div>
+      <div
+        class="d-flex flex-column justify-content-around element-border p-2 text-center"
+      >
+        <span class="text-black-50">Date & Time</span>
+        <div id="localDate">03.11.2020</div>
+        <span class="text-black-50">Local</span>
+        <div id="localTime">23:55</div>
+        <span class="text-black-50">UTC</span>
+        <div id="gpsTime">23:55</div>
+      </div>
+      <div class="element-border p-1 float-right">
+        <button id="settingsButton" type="button" class="btn btn-info">
+          Settings
+        </button>
       </div>
     </div>
     <script type="text/javascript" src="./scripts/index.js"></script>
