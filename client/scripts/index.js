@@ -93,8 +93,4 @@ document.addEventListener('DOMContentLoaded', () => {
     cmd: 'connect',
     data: null
   });
-
-  // FIXME Remove this, demo only
-  setInterval(windspeedChart.Update.bind(windspeedChart), 1000, 8);
-  setInterval(humidityChart.Update.bind(humidityChart), 1000, 20, 50);
 });
