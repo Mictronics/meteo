@@ -15,7 +15,12 @@ class WindspeedChart {
     this.windSpeed = fc
       .seriesSvgLine()
       .mainValue((d) => d.speed)
-      .crossValue((d) => d.date);
+      .crossValue((d) => d.date)
+      .decorate((sel) =>
+        sel
+          .enter()
+          .attr('style', 'stroke: black !important; stroke-width: 2px;')
+      );
     // Grid lines
     this.windSpeedGridLines = fc
       .annotationSvgGridline()

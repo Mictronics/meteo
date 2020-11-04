@@ -1,13 +1,3 @@
-.xWindSpeedGridLines {
-  stroke: lightblue !important;
-  stroke-width: 0.5px;
-}
-
-.yWindSpeedGridLines {
-  stroke: lightblue !important;
-  stroke-width: 0.5px;
-}
-
 .dotHumidity {
   fill: lawngreen !important;
 }
