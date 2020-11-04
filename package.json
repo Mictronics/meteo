@@ -28,7 +28,6 @@
     "eslint": "^7.12.1"
   },
   "scripts": {
-    "start": "npm run dev",
     "lint": "eslint --ext .js client"
   }
 }
