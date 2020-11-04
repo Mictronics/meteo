@@ -21,7 +21,9 @@
   </head>
   <body class="m-1 h-100">
     <div class="d-flex flex-row flex-wrap justify-content-between">
-      <div class="d-flex flex-column justify-content-around p-1 element-border">
+      <div
+        class="d-flex flex-column flex-grow-1 justify-content-around p-1 element-border"
+      >
         <div class="row">
           <div class="col-5 text-black-50">Temperature [°C]</div>
           <div class="col-3">---</div>
@@ -84,10 +86,14 @@
         <object type="image/svg+xml" data="./images/hsi.svg"></object>
         <div class="d-flex flex-row justify-content-around">
           <div class="text-black-50">Wind Direction [mean]</div>
+          <button id="buttonFromTo" type="button" class="btn btn-secondary">
+            TO
+          </button>
           <div class="text-black-50">Wind Speed [mean]</div>
         </div>
         <div class="d-flex flex-row justify-content-around">
           <div id="windDirectionMean" class="">---</div>
+          <span></span>
           <div id="windspeedMean" class="">---</div>
         </div>
       </div>
@@ -144,7 +150,7 @@
         <div id="localDate">--.--.----</div>
         <span class="text-black-50">Local</span>
         <div id="localTime">--:--</div>
-        <span class="text-black-50">UTC</span>
+        <span class="text-black-50">GPS UTC</span>
         <div id="gpsTime">--:--</div>
       </div>
       <div class="element-border p-1 float-right">
