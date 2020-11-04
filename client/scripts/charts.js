@@ -212,7 +212,7 @@ class HumidityChart {
     // Define humidity chart
     this.humidityChart = fc
       .chartCartesian(d3.scaleLinear(), d3.scaleLinear())
-      .yOrient('left')
+      .yOrient('right')
       .yDomain([0, 100])
       .xDomain([-10, 40])
       .svgPlotArea(this.multiHumiditySeries)
