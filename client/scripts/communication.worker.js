@@ -77,3 +77,7 @@ self.onmessage = (e) => {
       console.error(`Unknown command: ${msg.cmd}`);
   }
 };
+
+setInterval(() => {
+  getNetworkInfo();
+}, 5000);

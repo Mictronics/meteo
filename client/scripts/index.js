@@ -66,6 +66,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showNoty('Weather station disconnected', 'error');
         break;
       case 'network':
+        document.getElementById('linkSpeed').innerHTML = `${msg.data}Mbps`;
         break;
       case 'data':
         break;
