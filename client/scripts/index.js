@@ -14,6 +14,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // Init local time output
   setInterval(UpdateLocalTime, 1000);
   // FIXME Remove this, demo only
-  setInterval(windspeedChart.Update.bind(windspeedChart), 1000, 5);
+  setInterval(windspeedChart.Update.bind(windspeedChart), 1000, 8);
   setInterval(humidityChart.Update.bind(humidityChart), 1000, 20, 50);
 });

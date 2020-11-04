@@ -80,6 +80,10 @@ class WindspeedChart {
       date: new Date(),
       speed: windspeed
     });
+    // Keep only last 60s of windspeed data
+    if (this.windSpeedData.length > 60) {
+      this.windSpeedData.shift();
+    }
 
     this.windSpeedChart.xDomain(this.xExtent(this.windSpeedData));
     d3.select(this.element).datum(this.windSpeedData).call(this.windSpeedChart);
