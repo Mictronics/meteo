@@ -7,6 +7,14 @@
   "settings": {
     "eslint.workingDirectories": [
     
-    ]
+    ],
+    "eslint.alwaysShowStatus": true,
+    "eslint.lintTask.enable": true,
+    "eslint.probe": [
+      "javascript",
+      "html",
+      "markdown"
+    ],
+    "eslint.run": "onSave"
   }
 }

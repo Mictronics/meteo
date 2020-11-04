@@ -25,6 +25,7 @@
     "no-bitwise": "off",
     "comma-dangle": "off",
     "implicit-arrow-linebreak": "off",
-    "function-paren-newline": "off"
+    "function-paren-newline": "off",
+    "max-classes-per-file": "off"
   }
 }
