@@ -1,0 +1,5 @@
+# meteoserver configuration
+# This is read by the systemd service file as an environment file,
+# and evaluated by some scripts as a POSIX shell fragment.
+
+SERVER_OPTIONS=""
