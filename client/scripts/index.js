@@ -2,8 +2,16 @@ let isFromRunwayDirection = false;
 let isMasterControl = false;
 
 // Update local time indication periodically
-function UpdateLocalTime() {
-  const d = new Date();
+function UpdateGui(serverData) {
+  const d = new Date(
+    1900 + serverData.tm_year,
+    serverData.tm_mon,
+    serverData.tm_mday,
+    serverData.tm_hour,
+    serverData.tm_min,
+    serverData.tm_sec,
+    0
+  );
   document.getElementById('localDate').innerHTML = d.toLocaleDateString();
   document.getElementById('localTime').innerHTML = d.toLocaleTimeString();
 }
@@ -47,9 +55,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // Init charts
   const windspeedChart = new WindspeedChart('#windspeedChart', 0);
   const humidityChart = new HumidityChart('#humidityChart', 0, 0);
-  UpdateLocalTime();
-  // Init local time output
-  setInterval(UpdateLocalTime, 1000);
 
   // Create worker thread for server communication.
   const serverCommunicationWorker = new Worker(
@@ -69,6 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('linkSpeed').innerHTML = `${msg.data}Mbps`;
         break;
       case 'data':
+        UpdateGui(msg.data);
         break;
       default:
         console.error(`Unknown command: ${msg.cmd}`);
