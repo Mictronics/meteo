@@ -72,6 +72,10 @@ static struct
 static struct gps_data_t gpsdata;
 static bool gps_available = true;
 
+static unsigned int top_number = 0;
+static unsigned int flight_number = 0;
+static unsigned char record_status = 0;
+
 /**
  * Function parsing the arguments provided on run
  */
@@ -330,6 +334,7 @@ static void timer1_handler(size_t timer_id, void *user_data)
     time(&rawtime);
     timeinfo = localtime(&rawtime);
 
+    pthread_mutex_lock(&lock_established_conns);
     packet_data.tm_hour = (unsigned char)timeinfo->tm_hour;
     packet_data.tm_min = (unsigned char)timeinfo->tm_min;
     packet_data.tm_sec = (unsigned char)timeinfo->tm_sec;
@@ -346,7 +351,6 @@ static void timer1_handler(size_t timer_id, void *user_data)
     packet_data.gps_alt_msl = gpsdata.fix.altMSL;
     packet_data.gps_time = (long)gpsdata.fix.time.tv_sec;
 
-    pthread_mutex_lock(&lock_established_conns);
     lws_callback_on_writable_all_protocol(context, &protocols[1]);
     pthread_mutex_unlock(&lock_established_conns);
 }

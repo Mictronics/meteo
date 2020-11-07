@@ -1,6 +1,5 @@
 /*
- * Data received from Turtlerover websocket server.
- *
+ * Data received from meteo websocket server.
  */
 const serverData = Object.seal({
   master_client: 0,
@@ -61,40 +60,39 @@ function connect8080() {
       console.error(`Wrong type of received message: ${e.data}`);
     } else {
       const arr = new Uint8Array(e.data);
-      let dv = new DataView(arr.buffer, 0, 140);
-      serverData.master_client = dv.getInt8(0, true);
-      serverData.record_status = dv.getInt8(1, true);
-      serverData.tm_sec = dv.getInt8(2, true);
-      serverData.tm_min = dv.getInt8(3, true);
-      serverData.tm_hour = dv.getInt8(4, true);
-      serverData.tm_mday = dv.getInt8(5, true);
-      serverData.tm_mon = dv.getInt8(6, true);
-      serverData.humidity = dv.getInt8(7, true);
-      serverData.top_number = dv.getInt8(8, true);
-      serverData.gps_status = dv.getInt8(9, true);
-      serverData.gps_satellites_visible = dv.getInt8(10, true);
-      serverData.gps_satellites_used = dv.getInt8(11, true);
-      serverData.tm_year = dv.getInt16(12, true);
-      serverData.flight_number = dv.getInt16(14, true);
-      serverData.runway_heading = dv.getInt16(16, true);
-      serverData.wind_direction = dv.getInt16(18, true);
-      const t_msb = dv.getUint32(20, true);
-      const t_lsb = dv.getUint32(24, true);
+      let dv = new DataView(arr.buffer, 0, 139);
+      serverData.gps_hdop = dv.getFloat64(0, true);
+      serverData.gps_pdop = dv.getFloat64(8, true);
+      serverData.gps_lat = dv.getFloat64(16, true);
+      serverData.gps_lon = dv.getFloat64(24, true);
+      serverData.gps_alt_msl = dv.getFloat64(32, true);
+      serverData.barometer_height = dv.getFloat64(40, true);
+      serverData.runway_elevation = dv.getFloat64(48, true);
+      serverData.temperature = dv.getFloat64(56, true);
+      serverData.baro_pressure = dv.getFloat64(64, true);
+      serverData.windspeed = dv.getFloat64(72, true);
+      serverData.cross_windspeed = dv.getFloat64(80, true);
+      serverData.head_windspeed = dv.getFloat64(88, true);
+      serverData.baro_qfe = dv.getFloat64(96, true);
+      serverData.baro_qnh = dv.getFloat64(104, true);
+      const t_msb = dv.getUint32(112, true);
+      const t_lsb = dv.getUint32(116, true);
       serverData.gps_time = 0;
-      serverData.gps_hdop = dv.getFloat64(28, true);
-      serverData.gps_pdop = dv.getFloat64(36, true);
-      serverData.gps_lat = dv.getFloat64(44, true);
-      serverData.gps_lon = dv.getFloat64(52, true);
-      serverData.gps_alt_msl = dv.getFloat64(60, true);
-      serverData.barometer_height = dv.getFloat64(68, true);
-      serverData.runway_elevation = dv.getFloat64(76, true);
-      serverData.temperature = dv.getFloat64(84, true);
-      serverData.baro_pressure = dv.getFloat64(92, true);
-      serverData.windspeed = dv.getFloat64(100, true);
-      serverData.cross_windspeed = dv.getFloat64(108, true);
-      serverData.head_windspeed = dv.getFloat64(116, true);
-      serverData.baro_qfe = dv.getFloat64(124, true);
-      serverData.baro_qnh = dv.getFloat64(132, true);
+      serverData.flight_number = dv.getInt16(120, true);
+      serverData.runway_heading = dv.getInt16(122, true);
+      serverData.wind_direction = dv.getInt16(124, true);
+      serverData.tm_year = dv.getInt16(126, true);
+      serverData.tm_mon = dv.getInt8(128, true);
+      serverData.tm_mday = dv.getInt8(129, true);
+      serverData.tm_hour = dv.getInt8(130, true);
+      serverData.tm_min = dv.getInt8(131, true);
+      serverData.tm_sec = dv.getInt8(132, true);
+      serverData.humidity = dv.getInt8(133, true);
+      serverData.top_number = dv.getInt8(134, true);
+      serverData.gps_status = dv.getInt8(135, true);
+      serverData.gps_satellites_visible = dv.getInt8(136, true);
+      serverData.gps_satellites_used = dv.getInt8(137, true);
+      serverData.record_status = dv.getInt8(138, true);
 
       self.postMessage({ cmd: 'data', data: serverData });
     }
