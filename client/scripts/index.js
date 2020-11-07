@@ -1,26 +1,139 @@
 let isFromRunwayDirection = false;
-let isMasterControl = false;
+let flightNumber = -1;
+let topNumber = -1;
+let recordStatus = -1;
+
+// Create worker thread for server communication.
+const serverCommunicationWorker = new Worker(
+  './scripts/communication.worker.js'
+);
+
+const gpsStatus = [
+  'No Fix', // No Fix
+  'SPS', // plain GPS (SPS Mode), without DGPS, PPS, RTK, DR, etc.
+  'DGPS', // Differential GPS
+  'RTK', // RTK float
+  'RTK', // RTK fixed
+  'DR', // Dead reckoning
+  'GNSDR', // GNSS + dead reckoning
+  'TIME', // Time only
+  'SIM', // Simulation
+  'PPS' // Precision Position Mode P(Y)
+];
+
+const gpsMode = [
+  '', // 0 mode update not seen yet
+  '', // 1 none
+  '2D', // 2 good for latitude/longitude
+  '3D' // 3 good for altitude/climb too
+];
 
 // Update local time indication periodically
 function UpdateGui(serverData) {
-  const d = new Date(
-    1900 + serverData.tm_year,
-    serverData.tm_mon,
-    serverData.tm_mday,
-    serverData.tm_hour,
-    serverData.tm_min,
-    serverData.tm_sec,
+  // Server local time and date
+  let d = new Date(
+    1900 + serverData.year,
+    serverData.month,
+    serverData.day,
+    serverData.hour,
+    serverData.minute,
+    serverData.second,
     0
   );
   document.getElementById('localDate').innerHTML = d.toLocaleDateString();
   document.getElementById('localTime').innerHTML = d.toLocaleTimeString();
+
+  // Flight and top number
+  const fn = document.getElementById('flightNumberInput');
+  const tn = document.getElementById('topNumberInput');
+  if (flightNumber < 0) {
+    fn.value = serverData.flightNumber;
+    flightNumber = serverData.flightNumber;
+  }
+
+  if (fn.value < serverData.flightNumber) {
+    fn.classList.add('is-invalid');
+  } else {
+    fn.classList.remove('is-invalid');
+  }
+
+  if (serverData.topNumber > topNumber) {
+    tn.value = serverData.topNumber;
+    topNumber = serverData.topNumber;
+  }
+
+  if (tn.value < serverData.topNumber) {
+    tn.classList.add('is-invalid');
+  } else {
+    tn.classList.remove('is-invalid');
+  }
+
+  recordStatus = serverData.recordStatus;
+  if (recordStatus === 0) {
+    fn.disabled = false;
+    tn.disabled = false;
+    document.getElementById('recordSpinner').classList.add('d-none');
+  } else {
+    fn.disabled = true;
+    tn.disabled = true;
+    document.getElementById('recordSpinner').classList.remove('d-none');
+  }
+
+  // GPS Information
+  document.getElementById(
+    'gpsLat'
+  ).innerHTML = `${serverData.gpsLat.toPrecision(8)}°`;
+  document.getElementById(
+    'gpsLon'
+  ).innerHTML = `${serverData.gpsLon.toPrecision(8)}°`;
+  document.getElementById(
+    'gpsAltMsl'
+  ).innerHTML = `${serverData.gpsAltMsl.toPrecision(5)}`;
+  document.getElementById(
+    'gpsSatellites'
+  ).innerHTML = `${serverData.gpsSatellitesUsed}/${serverData.gpsSatellitesVisible}`;
+  document.getElementById('gpsStatus').innerHTML = `${
+    gpsMode[serverData.gpsMode]
+  } ${gpsStatus[serverData.gpsStatus]}`;
+  document.getElementById(
+    'gpsDOP'
+  ).innerHTML = `${serverData.gpsPDOP.toPrecision(
+    2
+  )}/${serverData.gpsHDOP.toPrecision(2)}`;
+
+  d = new Date(0);
+  d.setUTCSeconds(serverData.gpsTime);
+  document.getElementById('gpsTime').innerHTML =
+    d.getUTCHours().toString(10).padStart(2, '0') +
+    ':' +
+    d.getUTCMinutes().toString(10).padStart(2, '0') +
+    ':' +
+    d.getUTCSeconds().toString(10).padStart(2, '0');
 }
 
 // Show settings dialog
 function OnSettingsButtonClick(ev) {}
 
 // Start/stop recording
-function OnRecordButtonClick(ev) {}
+function OnRecordButtonClick(ev) {
+  if (recordStatus === 0) {
+    serverCommunicationWorker.postMessage({
+      cmd: 'start',
+      data: {
+        flightNumber: Number.parseInt(
+          document.getElementById('flightNumberInput').value,
+          10
+        ),
+        topNumber
+      }
+    });
+  } else {
+    serverCommunicationWorker.postMessage({
+      cmd: 'stop',
+      data: null
+    });
+  }
+}
 
 // Change runway direction by 180°
 function OnFromToButtonClick(ev) {
@@ -33,9 +146,6 @@ function OnFromToButtonClick(ev) {
     isFromRunwayDirection = true;
   }
 }
-
-// Change client status of master control
-function OnMasterControlButtonClick(ev) {}
 
 // Show new noty of specific type
 function showNoty(text, type) {
@@ -55,11 +165,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // Init charts
   const windspeedChart = new WindspeedChart('#windspeedChart', 0);
   const humidityChart = new HumidityChart('#humidityChart', 0, 0);
-
-  // Create worker thread for server communication.
-  const serverCommunicationWorker = new Worker(
-    './scripts/communication.worker.js'
-  );
 
   serverCommunicationWorker.onmessage = (e) => {
     const msg = e.data;
@@ -91,9 +196,6 @@ document.addEventListener('DOMContentLoaded', () => {
   document
     .getElementById('fromToButton')
     .addEventListener('click', OnFromToButtonClick);
-  document
-    .getElementById('masterControlButton')
-    .addEventListener('click', OnMasterControlButtonClick);
 
   // Finally, connect to weather station
   serverCommunicationWorker.postMessage({

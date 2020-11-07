@@ -1,38 +1,46 @@
+/* Know server commands, same as in meteoserver.h. */
+const ServerCmd = Object.freeze({
+  Start: 0x1a,
+  Stop: 0x2b
+});
+
 /*
  * Data received from meteo websocket server.
  */
 const serverData = Object.seal({
-  master_client: 0,
-  record_status: 0,
-  tm_sec: 0,
-  tm_min: 0,
-  tm_hour: 0,
-  tm_mday: 0,
-  tm_mon: 0,
-  tm_year: 0,
-  top_number: 0,
-  flight_number: 0,
-  gps_status: 0,
-  gps_satellites_visible: 0,
-  gps_satellites_used: 0,
-  gps_time: 0,
-  gps_hdop: 0,
-  gps_pdop: 0,
-  gps_lat: 0,
-  gps_lon: 0,
-  gps_alt_msl: 0,
-  runway_elevation: 0,
-  runway_heading: 0,
+  recordStatus: 0,
+  second: 0,
+  minute: 0,
+  hour: 0,
+  day: 0,
+  month: 0,
+  year: 0,
+  topNumber: 0,
+  flightNumber: 0,
+  gpsStatus: 0,
+  gpsMode: 0,
+  gpsSatellitesVisible: 0,
+  gpsSatellitesUsed: 0,
+  gpsTime: 0,
+  gpsHDOP: 0,
+  gpsPDOP: 0,
+  gpsLat: 0,
+  gpsLon: 0,
+  gpsAltMsl: 0,
+  runwayElevation: 0,
+  runwayHeading: 0,
   temperature: 0,
   humidity: 0,
-  baro_pressure: 0,
-  wind_direction: 0,
+  baroPressure: 0,
+  windDirection: 0,
   windspeed: 0,
-  cross_windspeed: 0,
-  head_windspeed: 0,
-  baro_qfe: 0,
-  baro_qnh: 0,
-  barometer_height: 0
+  crossWindspeed: 0,
+  headWindspeed: 0,
+  QFE: 0,
+  QNH: 0,
+  barometerHeight: 0,
+  timeDiffSec: 0,
+  timeDiffnSec: 0
 });
 
 /*
@@ -43,6 +51,26 @@ let socket8080 = null;
 const connection = navigator.connection || navigator.mozConnection || null;
 if (connection === null) {
   console.error('Network Information API not supported.');
+}
+
+/**
+ * Because JavaScript does not currently include standard support for 64-bit integer values,
+ * DataView does not offer native 64-bit operations.
+ */
+function getUint64(dataview, byteOffset, littleEndian) {
+  // split 64-bit number into two 32-bit (4-byte) parts
+  const left = dataview.getUint32(byteOffset, littleEndian);
+  const right = dataview.getUint32(byteOffset + 4, littleEndian);
+
+  // combine the two 32-bit values
+  const combined = littleEndian
+    ? left + 2 ** 32 * right
+    : 2 ** 32 * left + right;
+
+  if (!Number.isSafeInteger(combined))
+    console.warn(combined, 'exceeds MAX_SAFE_INTEGER. Precision may be lost');
+
+  return combined;
 }
 
 /*
@@ -60,39 +88,40 @@ function connect8080() {
       console.error(`Wrong type of received message: ${e.data}`);
     } else {
       const arr = new Uint8Array(e.data);
-      let dv = new DataView(arr.buffer, 0, 139);
-      serverData.gps_hdop = dv.getFloat64(0, true);
-      serverData.gps_pdop = dv.getFloat64(8, true);
-      serverData.gps_lat = dv.getFloat64(16, true);
-      serverData.gps_lon = dv.getFloat64(24, true);
-      serverData.gps_alt_msl = dv.getFloat64(32, true);
-      serverData.barometer_height = dv.getFloat64(40, true);
-      serverData.runway_elevation = dv.getFloat64(48, true);
+      let dv = new DataView(arr.buffer, 0, arr.length);
+      serverData.gpsHDOP = dv.getFloat64(0, true);
+      serverData.gpsPDOP = dv.getFloat64(8, true);
+      serverData.gpsLat = dv.getFloat64(16, true);
+      serverData.gpsLon = dv.getFloat64(24, true);
+      serverData.gpsAltMsl = dv.getFloat64(32, true);
+      serverData.barometerHeight = dv.getFloat64(40, true);
+      serverData.runwayElevation = dv.getFloat64(48, true);
       serverData.temperature = dv.getFloat64(56, true);
-      serverData.baro_pressure = dv.getFloat64(64, true);
+      serverData.baroPressure = dv.getFloat64(64, true);
       serverData.windspeed = dv.getFloat64(72, true);
-      serverData.cross_windspeed = dv.getFloat64(80, true);
-      serverData.head_windspeed = dv.getFloat64(88, true);
-      serverData.baro_qfe = dv.getFloat64(96, true);
-      serverData.baro_qnh = dv.getFloat64(104, true);
-      const t_msb = dv.getUint32(112, true);
-      const t_lsb = dv.getUint32(116, true);
-      serverData.gps_time = 0;
-      serverData.flight_number = dv.getInt16(120, true);
-      serverData.runway_heading = dv.getInt16(122, true);
-      serverData.wind_direction = dv.getInt16(124, true);
-      serverData.tm_year = dv.getInt16(126, true);
-      serverData.tm_mon = dv.getInt8(128, true);
-      serverData.tm_mday = dv.getInt8(129, true);
-      serverData.tm_hour = dv.getInt8(130, true);
-      serverData.tm_min = dv.getInt8(131, true);
-      serverData.tm_sec = dv.getInt8(132, true);
-      serverData.humidity = dv.getInt8(133, true);
-      serverData.top_number = dv.getInt8(134, true);
-      serverData.gps_status = dv.getInt8(135, true);
-      serverData.gps_satellites_visible = dv.getInt8(136, true);
-      serverData.gps_satellites_used = dv.getInt8(137, true);
-      serverData.record_status = dv.getInt8(138, true);
+      serverData.crossWindspeed = dv.getFloat64(80, true);
+      serverData.headWindspeed = dv.getFloat64(88, true);
+      serverData.QFE = dv.getFloat64(96, true);
+      serverData.QNH = dv.getFloat64(104, true);
+      serverData.gpsTime = getUint64(dv, 112, true);
+      serverData.timeDiffSec = getUint64(dv, 120, true);
+      serverData.timeDiffnSec = getUint64(dv, 128, true);
+      serverData.flightNumber = dv.getInt16(136, true);
+      serverData.runwayHeading = dv.getInt16(138, true);
+      serverData.windDirection = dv.getInt16(140, true);
+      serverData.year = dv.getInt16(142, true);
+      serverData.month = dv.getInt8(144, true);
+      serverData.day = dv.getInt8(145, true);
+      serverData.hour = dv.getInt8(146, true);
+      serverData.minute = dv.getInt8(147, true);
+      serverData.second = dv.getInt8(148, true);
+      serverData.humidity = dv.getInt8(149, true);
+      serverData.topNumber = dv.getInt8(150, true);
+      serverData.gpsStatus = dv.getInt8(151, true);
+      serverData.gpsMode = dv.getInt8(152, true);
+      serverData.gpsSatellitesVisible = dv.getInt8(153, true);
+      serverData.gpsSatellitesUsed = dv.getInt8(154, true);
+      serverData.recordStatus = dv.getInt8(155, true);
 
       self.postMessage({ cmd: 'data', data: serverData });
     }
@@ -137,6 +166,24 @@ self.onmessage = (e) => {
   switch (msg.cmd) {
     case 'connect':
       connect8080();
+      break;
+    case 'start':
+      if (socket8080 !== null && socket8080.readyState === 1) {
+        const buf = new ArrayBuffer(4);
+        const dv = new DataView(buf);
+        dv.setUint8(0, ServerCmd.Start);
+        dv.setUint16(1, msg.data.flightNumber, true);
+        dv.setUint8(3, msg.data.topNumber);
+        socket8080.send(buf);
+      }
+      break;
+    case 'stop':
+      if (socket8080 !== null && socket8080.readyState === 1) {
+        const buf = new ArrayBuffer(1);
+        const dv = new DataView(buf);
+        dv.setUint8(0, ServerCmd.Stop);
+        socket8080.send(buf);
+      }
       break;
     default:
       console.error(`Unknown command: ${msg.cmd}`);

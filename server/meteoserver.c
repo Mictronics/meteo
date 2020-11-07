@@ -8,12 +8,14 @@
 #include <linux/un.h>
 #include <sys/reboot.h>
 #include <sys/ioctl.h>
+#include <time.h>
+#include "timespec.h"
 #include "help.h"
 #include "serial.h"
 #include "timer.h"
 #include "meteoserver.h"
 #define NOTUSED(V) ((void)V)
-#define WSBUFFERSIZE 256 /* Byte */
+#define WSBUFFERSIZE 512 /* Byte */
 
 static int debug_level = 0;
 static int uid = -1, gid = -1, num_clients = 0;
@@ -32,6 +34,9 @@ static unsigned char wsbuffer[WSBUFFERSIZE];
 static unsigned char *pwsbuffer = wsbuffer;
 static int wsbuffer_len = 0;
 pthread_mutex_t lock_established_conns;
+pthread_t gps_thread;
+pthread_mutex_t lock_gpsdata_update;
+static bool gps_thread_exit = false;
 
 /**
  * One of these is created for each client connecting.
@@ -73,7 +78,7 @@ static struct gps_data_t gpsdata;
 static bool gps_available = true;
 
 static unsigned int top_number = 0;
-static unsigned int flight_number = 0;
+static unsigned int flight_number = 1;
 static unsigned char record_status = 0;
 
 /**
@@ -146,6 +151,32 @@ static size_t uint64_to_bytes(unsigned char *bytes_temp, uint64_t uint64_variabl
 }
 
 /**
+ * Start recording.
+ */
+static void start_recording(t_start_cmd *start_cmd)
+{
+    if (start_cmd->flight_number > 0)
+    {
+        flight_number = start_cmd->flight_number;
+    }
+
+    if (start_cmd->top_number >= top_number)
+    {
+        top_number = start_cmd->top_number;
+    }
+    record_status = 1;
+}
+
+/**
+ * Stop recording.
+ */
+static void stop_recording(void)
+{
+    top_number += 1;
+    record_status = 0;
+}
+
+/**
  * Handle requests from client.
  */
 static void handle_client_request(void *in, size_t len)
@@ -154,6 +185,18 @@ static void handle_client_request(void *in, size_t len)
 
     switch (*id)
     {
+    case SERVER_CMD_START:
+        // Start recording
+        if (len < 4)
+            break;
+        start_recording((t_start_cmd *)in);
+        break;
+    case SERVER_CMD_STOP:
+        // Stop recording
+        if (len < 1)
+            break;
+        stop_recording();
+        break;
     default:
         break;
     }
@@ -232,8 +275,6 @@ static int callback_broadcast(struct lws *wsi, enum lws_callback_reasons reason,
         break;
 
     case LWS_CALLBACK_RECEIVE:
-        if (!pss->publishing)
-            break;
         /*
 		 * For test, our policy is ignore publishing when there are
 		 * no subscribers connected.
@@ -295,15 +336,50 @@ static struct lws_protocols protocols[] = {
 static void sighandler(int sig)
 {
     NOTUSED(sig);
-    pthread_mutex_unlock(&lock_established_conns);
-    pthread_mutex_destroy(&lock_established_conns);
     stop_timer(packet_timer);
     finalize_timer();
-    close_serial();
+
+    pthread_mutex_unlock(&lock_gpsdata_update);
+    gps_thread_exit = true;
+    pthread_join(gps_thread, NULL); /* Wait on GPS read thread exit */
+    pthread_mutex_destroy(&lock_gpsdata_update);
     gps_close(&gpsdata);
+
+    pthread_mutex_unlock(&lock_established_conns);
+    pthread_mutex_destroy(&lock_established_conns);
+
+    close_serial();
     lws_cancel_service(context);
     lws_context_destroy(context);
     exit(EXIT_SUCCESS);
+}
+
+/**
+ * GPS read thread.
+ * This need its own thread to avoid delays in time update.
+ */
+void *gps_read_thread(void *arg)
+{
+    NOTUSED(arg);
+    lwsl_notice("GPS read thread started.");
+    while (!gps_thread_exit)
+    {
+        pthread_mutex_trylock(&lock_gpsdata_update);
+        if (gps_available)
+        {
+            if (gps_waiting(&gpsdata, 500000))
+            {
+                if (gps_read(&gpsdata, NULL, 0) == -1)
+                {
+                    lwsl_err("GPS read error.\n");
+                }
+            }
+        }
+        pthread_mutex_unlock(&lock_gpsdata_update);
+    }
+
+    pthread_mutex_unlock(&lock_gpsdata_update);
+    pthread_exit(NULL);
 }
 
 /**
@@ -329,30 +405,40 @@ static int thread_to_core(int core_id)
  */
 static void timer1_handler(size_t timer_id, void *user_data)
 {
-    time_t rawtime;
     struct tm *timeinfo;
-    time(&rawtime);
-    timeinfo = localtime(&rawtime);
+    timespec_t ts_now, ts_diff, ts_gps;
 
-    pthread_mutex_lock(&lock_established_conns);
-    packet_data.tm_hour = (unsigned char)timeinfo->tm_hour;
-    packet_data.tm_min = (unsigned char)timeinfo->tm_min;
-    packet_data.tm_sec = (unsigned char)timeinfo->tm_sec;
-    packet_data.tm_mday = (unsigned char)timeinfo->tm_mday;
-    packet_data.tm_mon = (unsigned char)timeinfo->tm_mon;
-    packet_data.tm_year = (unsigned short)timeinfo->tm_year;
+    // Block gpsdata only a minimum time
+    pthread_mutex_trylock(&lock_gpsdata_update);
     packet_data.gps_status = (unsigned char)gpsdata.status;
+    packet_data.gps_mode = (unsigned char)gpsdata.fix.mode;
     packet_data.gps_satellites_visible = (unsigned char)gpsdata.satellites_visible;
     packet_data.gps_satellites_used = (unsigned char)gpsdata.satellites_used;
     packet_data.gps_hdop = gpsdata.dop.hdop;
     packet_data.gps_pdop = gpsdata.dop.pdop;
     packet_data.gps_lat = gpsdata.fix.latitude;
     packet_data.gps_lon = gpsdata.fix.longitude;
-    packet_data.gps_alt_msl = gpsdata.fix.altMSL;
+    packet_data.gps_alt_msl = gpsdata.fix.altMSL * METERS_TO_FEET;
     packet_data.gps_time = (long)gpsdata.fix.time.tv_sec;
+    ts_gps = gpsdata.fix.time;
+    pthread_mutex_unlock(&lock_gpsdata_update);
+
+    (void)clock_gettime(CLOCK_REALTIME, &ts_now);
+    timeinfo = localtime(&ts_now.tv_sec);
+    TS_SUB(&ts_diff, &ts_now, &ts_gps);
+    packet_data.tm_diff_sec = (long)ts_diff.tv_sec;
+    packet_data.tm_diff_nsec = (long)ts_diff.tv_nsec;
+    packet_data.tm_hour = (unsigned char)timeinfo->tm_hour;
+    packet_data.tm_min = (unsigned char)timeinfo->tm_min;
+    packet_data.tm_sec = (unsigned char)timeinfo->tm_sec;
+    packet_data.tm_mday = (unsigned char)timeinfo->tm_mday;
+    packet_data.tm_mon = (unsigned char)timeinfo->tm_mon;
+    packet_data.tm_year = (unsigned short)timeinfo->tm_year;
+    packet_data.flight_number = flight_number;
+    packet_data.top_number = top_number;
+    packet_data.record_status = record_status;
 
     lws_callback_on_writable_all_protocol(context, &protocols[1]);
-    pthread_mutex_unlock(&lock_established_conns);
 }
 
 /**
@@ -383,12 +469,7 @@ int main(int argc, char **argv)
     info.extensions = NULL;
     info.timeout_secs = 5;
     info.ssl_cipher_list = NULL;
-    info.max_http_header_data = 8192; /* Increased header length due to cookie size
-                                       * Needs to be increased even more in case of
-                                       * error "Ran out of header data space" during
-                                       * client connect.
-                                       */
-
+    info.max_http_header_data = 2048;
     /* Parse the command line options */
     if (argp_parse(&argp, argc, argv, 0, 0, 0))
     {
@@ -447,6 +528,8 @@ int main(int argc, char **argv)
         if (gpssource.device != NULL)
             flags |= WATCH_DEVICE;
         gps_stream(&gpsdata, flags, gpssource.device);
+        /* Start reading GPS data */
+        pthread_create(&gps_thread, NULL, gps_read_thread, NULL);
     }
 
     /* Create libwebsocket context representing this server */
@@ -459,7 +542,7 @@ int main(int argc, char **argv)
     }
 
     initialize_timer();
-    packet_timer = start_timer(1000, timer1_handler, TIMER_PERIODIC, NULL);
+    packet_timer = start_timer(500, timer1_handler, TIMER_PERIODIC, NULL);
 
     // Infinite loop, to end this server send SIGTERM. (CTRL+C) */
     for (;;)
@@ -471,16 +554,6 @@ int main(int argc, char **argv)
          * server from generating load while there are not
          * requests to process)
          */
-        if (gps_available)
-        {
-            if (gps_waiting(&gpsdata, 500000))
-            {
-                if (gps_read(&gpsdata, NULL, 0) == -1)
-                {
-                    lwsl_err("GPS read error.\n");
-                }
-            }
-        }
     }
 
     sighandler(0);

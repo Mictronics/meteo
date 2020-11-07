@@ -108,14 +108,32 @@
         <span class="text-black-50">GPS Information</span>
         <div class="d-flex flex-row">
           <ul class="list-group list-group-flush">
-            <li id="gpsLat" class="list-group-item">---</li>
-            <li id="gpsLon" class="list-group-item">---</li>
-            <li id="gpsAlt" class="list-group-item">---</li>
+            <li class="list-group-item">
+              <span class="text-black-50">Mode: </span>
+              <span id="gpsStatus">---</span>
+            </li>
+            <li class="list-group-item">
+              <span class="text-black-50">Satellites: </span>
+              <span id="gpsSatellites">---</span>
+            </li>
+            <li class="list-group-item">
+              <span class="text-black-50">PDOP/HDOP: </span>
+              <span id="gpsDOP">---</span>
+            </li>
           </ul>
           <ul class="list-group list-group-flush">
-            <li id="gpsQuality" class="list-group-item">---</li>
-            <li id="gpsSatellites" class="list-group-item">---</li>
-            <li id="gpsHDOP" class="list-group-item">---</li>
+            <li class="list-group-item">
+              <span class="text-black-50">Latitude: </span>
+              <span id="gpsLat">---</span>
+            </li>
+            <li class="list-group-item">
+              <span class="text-black-50">Longitude: </span>
+              <span id="gpsLon">---</span>
+            </li>
+            <li class="list-group-item">
+              <span class="text-black-50">Alt MSL [ft]: </span>
+              <span id="gpsAltMsl">---</span>
+            </li>
           </ul>
         </div>
       </div>
@@ -123,21 +141,40 @@
         <span class="text-black-50">Record</span>
         <form class="d-flex flex-row">
           <div class="pr-1 mb-1">
-            <label class="col-form-label" for="flightNumberInput"
+            <label class="col-form-label text-black-50" for="flightNumberInput"
               >Flight Number</label
             >
-            <input type="text" class="form-control" id="flightNumberInput" />
+            <input
+              type="number"
+              class="form-control"
+              id="flightNumberInput"
+              min="0"
+              max="65535"
+            />
+            <div class="invalid-feedback">
+              Flight number lower than on server!
+            </div>
           </div>
           <div class="pr-1">
-            <label class="col-form-label" for="topNumberInput"
+            <label class="col-form-label text-black-50" for="topNumberInput"
               >TOP Number</label
             >
-            <input type="number" class="form-control" id="topNumberInput" />
+            <input
+              type="number"
+              class="form-control"
+              id="topNumberInput"
+              min="0"
+              max="255"
+            />
+            <div class="invalid-feedback">
+              TOP number lower or equal to server!
+            </div>
           </div>
         </form>
         <button id="recordButton" class="btn btn-danger" type="button">
           Record
           <span
+            id="recordSpinner"
             class="spinner-border spinner-border-sm d-none"
             role="status"
             aria-hidden="true"
@@ -157,9 +194,6 @@
       <div class="d-flex flex-column justify-content-around element-border p-1">
         <button id="settingsButton" type="button" class="btn btn-info">
           Settings
-        </button>
-        <button id="masterControlButton" type="button" class="btn btn-light">
-          MASTER
         </button>
       </div>
       <div
