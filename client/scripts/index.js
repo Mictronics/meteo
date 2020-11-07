@@ -1,4 +1,3 @@
-let isFromRunwayDirection = false;
 let flightNumber = -1;
 let topNumber = -1;
 let recordStatus = -1;
@@ -116,6 +115,13 @@ function UpdateGui(serverData) {
   ).innerHTML = `${serverData.gpsPDOP.toPrecision(
     2
   )}/${serverData.gpsHDOP.toPrecision(2)}`;
+
+  const btn = document.getElementById('fromToButton');
+  if (serverData.fromToStatus) {
+    btn.classList.replace('btn-secondary', 'btn-warning');
+  } else {
+    btn.classList.replace('btn-warning', 'btn-secondary');
+  }
 }
 
 // Show settings dialog
@@ -144,14 +150,10 @@ function OnRecordButtonClick(ev) {
 
 // Change runway direction by 180°
 function OnFromToButtonClick(ev) {
-  const btn = document.getElementById('fromToButton');
-  if (isFromRunwayDirection) {
-    btn.classList.replace('btn-warning', 'btn-secondary');
-    isFromRunwayDirection = false;
-  } else {
-    btn.classList.replace('btn-secondary', 'btn-warning');
-    isFromRunwayDirection = true;
-  }
+  serverCommunicationWorker.postMessage({
+    cmd: 'fromto',
+    data: null
+  });
 }
 
 // Show new noty of specific type

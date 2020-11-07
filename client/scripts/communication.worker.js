@@ -1,7 +1,8 @@
 /* Know server commands, same as in meteoserver.h. */
 const ServerCmd = Object.freeze({
   Start: 0x1a,
-  Stop: 0x2b
+  Stop: 0x2b,
+  FromTo: 0x3c
 });
 
 /*
@@ -29,11 +30,14 @@ const serverData = Object.seal({
   gpsAltMsl: 0,
   runwayElevation: 0,
   runwayHeading: 0,
+  fromToStatus: 0,
   temperature: 0,
   humidity: 0,
   baroPressure: 0,
   windDirection: 0,
+  windDirectionMean: 0,
   windspeed: 0,
+  windspeedMean: 0,
   crossWindspeed: 0,
   headWindspeed: 0,
   QFE: 0,
@@ -98,28 +102,31 @@ function connect8080() {
       serverData.temperature = dv.getFloat64(56, true);
       serverData.baroPressure = dv.getFloat64(64, true);
       serverData.windspeed = dv.getFloat64(72, true);
-      serverData.crossWindspeed = dv.getFloat64(80, true);
-      serverData.headWindspeed = dv.getFloat64(88, true);
-      serverData.QFE = dv.getFloat64(96, true);
-      serverData.QNH = dv.getFloat64(104, true);
-      serverData.timeDiff = dv.getFloat64(112, true);
-      serverData.gpsTime = dv.getFloat64(120, true);
-      serverData.flightNumber = dv.getInt16(128, true);
-      serverData.runwayHeading = dv.getInt16(130, true);
-      serverData.windDirection = dv.getInt16(132, true);
-      serverData.year = dv.getInt16(134, true);
-      serverData.month = dv.getInt8(136, true);
-      serverData.day = dv.getInt8(137, true);
-      serverData.hour = dv.getInt8(138, true);
-      serverData.minute = dv.getInt8(139, true);
-      serverData.second = dv.getInt8(140, true);
-      serverData.humidity = dv.getInt8(141, true);
-      serverData.topNumber = dv.getInt8(142, true);
-      serverData.gpsStatus = dv.getInt8(143, true);
-      serverData.gpsMode = dv.getInt8(144, true);
-      serverData.gpsSatellitesVisible = dv.getInt8(145, true);
-      serverData.gpsSatellitesUsed = dv.getInt8(146, true);
-      serverData.recordStatus = dv.getInt8(147, true);
+      serverData.windspeedMean = dv.getFloat64(80, true);
+      serverData.crossWindspeed = dv.getFloat64(88, true);
+      serverData.headWindspeed = dv.getFloat64(96, true);
+      serverData.QFE = dv.getFloat64(104, true);
+      serverData.QNH = dv.getFloat64(112, true);
+      serverData.timeDiff = dv.getFloat64(120, true);
+      serverData.gpsTime = dv.getFloat64(128, true);
+      serverData.flightNumber = dv.getInt16(136, true);
+      serverData.runwayHeading = dv.getInt16(138, true);
+      serverData.windDirection = dv.getInt16(140, true);
+      serverData.windDirectionMean = dv.getInt16(142, true);
+      serverData.year = dv.getInt16(144, true);
+      serverData.month = dv.getInt8(146, true);
+      serverData.day = dv.getInt8(147, true);
+      serverData.hour = dv.getInt8(148, true);
+      serverData.minute = dv.getInt8(149, true);
+      serverData.second = dv.getInt8(150, true);
+      serverData.humidity = dv.getInt8(151, true);
+      serverData.topNumber = dv.getInt8(152, true);
+      serverData.gpsStatus = dv.getInt8(153, true);
+      serverData.gpsMode = dv.getInt8(154, true);
+      serverData.gpsSatellitesVisible = dv.getInt8(155, true);
+      serverData.gpsSatellitesUsed = dv.getInt8(156, true);
+      serverData.recordStatus = dv.getInt8(157, true);
+      serverData.fromToStatus = dv.getInt8(158, true);
 
       self.postMessage({ cmd: 'data', data: serverData });
     }
@@ -180,6 +187,14 @@ self.onmessage = (e) => {
         const buf = new ArrayBuffer(1);
         const dv = new DataView(buf);
         dv.setUint8(0, ServerCmd.Stop);
+        socket8080.send(buf);
+      }
+      break;
+    case 'fromto':
+      if (socket8080 !== null && socket8080.readyState === 1) {
+        const buf = new ArrayBuffer(1);
+        const dv = new DataView(buf);
+        dv.setUint8(0, ServerCmd.FromTo);
         socket8080.send(buf);
       }
       break;

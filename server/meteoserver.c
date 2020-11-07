@@ -78,10 +78,6 @@ static struct
 static struct gps_data_t gpsdata;
 static bool gps_available = true;
 
-static unsigned int top_number = 0;
-static unsigned int flight_number = 1;
-static unsigned char record_status = 0;
-
 /**
  * Function parsing the arguments provided on run
  */
@@ -158,14 +154,14 @@ static void start_recording(t_start_cmd *start_cmd)
 {
     if (start_cmd->flight_number > 0)
     {
-        flight_number = start_cmd->flight_number;
+        packet_data.flight_number = start_cmd->flight_number;
     }
 
-    if (start_cmd->top_number >= top_number)
+    if (start_cmd->top_number >= packet_data.top_number)
     {
-        top_number = start_cmd->top_number;
+        packet_data.top_number = start_cmd->top_number;
     }
-    record_status = 1;
+    packet_data.record_status = 1;
 }
 
 /**
@@ -173,8 +169,8 @@ static void start_recording(t_start_cmd *start_cmd)
  */
 static void stop_recording(void)
 {
-    top_number += 1;
-    record_status = 0;
+    packet_data.top_number += 1;
+    packet_data.record_status = 0;
 }
 
 /**
@@ -197,6 +193,17 @@ static void handle_client_request(void *in, size_t len)
         if (len < 1)
             break;
         stop_recording();
+        break;
+    case SERVER_CMD_FROMTO:
+        // Change runway heading from to status
+        if (len < 1)
+            break;
+        packet_data.runway_heading = (packet_data.runway_heading + 180) % 360;
+        if(packet_data.from_to_status == 0) {
+            packet_data.from_to_status = 1;
+        } else {
+            packet_data.from_to_status = 0;
+        }
         break;
     default:
         break;
@@ -435,9 +442,6 @@ static void timer1_handler(size_t timer_id, void *user_data)
     packet_data.tm_mday = (unsigned char)timeinfo->tm_mday;
     packet_data.tm_mon = (unsigned char)timeinfo->tm_mon;
     packet_data.tm_year = (unsigned short)timeinfo->tm_year;
-    packet_data.flight_number = flight_number;
-    packet_data.top_number = top_number;
-    packet_data.record_status = record_status;
 
     lws_callback_on_writable_all_protocol(context, &protocols[1]);
 }

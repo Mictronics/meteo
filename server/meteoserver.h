@@ -3,6 +3,7 @@
 
 #define SERVER_CMD_START 0x1a
 #define SERVER_CMD_STOP 0x2b
+#define SERVER_CMD_FROMTO 0x3c
 
 typedef struct __attribute__((__packed__))
 {
@@ -16,6 +17,7 @@ typedef struct __attribute__((__packed__))
     double temperature;
     double baro_pressure;
     double windspeed;
+    double windspeed_mean;
     double cross_windspeed;
     double head_windspeed;
     double baro_qfe;
@@ -25,6 +27,7 @@ typedef struct __attribute__((__packed__))
     unsigned short flight_number;
     unsigned short runway_heading;
     unsigned short wind_direction;
+    unsigned short wind_direction_mean;
     unsigned short tm_year; /* Year	- 1900.  */
     unsigned char tm_mon;   /* Month.	[0-11] */
     unsigned char tm_mday;  /* Day.		[1-31] */
@@ -38,6 +41,7 @@ typedef struct __attribute__((__packed__))
     unsigned char gps_satellites_visible;
     unsigned char gps_satellites_used;
     unsigned char record_status;
+    unsigned char from_to_status;
 } t_packet_data;
 
 typedef struct __attribute__((__packed__))
