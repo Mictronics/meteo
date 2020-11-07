@@ -20,9 +20,8 @@ typedef struct __attribute__((__packed__))
     double head_windspeed;
     double baro_qfe;
     double baro_qnh;
-    long gps_time;
-    long tm_diff_sec;
-    long tm_diff_nsec;
+    double tm_diff;
+    double gps_time;
     unsigned short flight_number;
     unsigned short runway_heading;
     unsigned short wind_direction;

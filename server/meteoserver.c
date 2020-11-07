@@ -23,7 +23,8 @@ static char interface_name[255] = "";
 static const char *iface = NULL;
 static int syslog_options = LOG_PID | LOG_PERROR;
 static size_t packet_timer = 0;
-t_packet_data packet_data;
+static t_packet_data packet_data;
+static timespec_t ts_now, ts_diff, ts_gps;
 
 #ifndef LWS_NO_DAEMONIZE
 static int daemonize = 0;
@@ -373,6 +374,11 @@ void *gps_read_thread(void *arg)
                 {
                     lwsl_err("GPS read error.\n");
                 }
+                // Calculate difference between local and GPS time
+                // Done here to avoid any latency caused by LWS
+                ts_gps = gpsdata.fix.time;
+                (void)clock_gettime(CLOCK_REALTIME, &ts_now);
+                TS_SUB(&ts_diff, &ts_now, &ts_gps);
             }
         }
         pthread_mutex_unlock(&lock_gpsdata_update);
@@ -406,7 +412,6 @@ static int thread_to_core(int core_id)
 static void timer1_handler(size_t timer_id, void *user_data)
 {
     struct tm *timeinfo;
-    timespec_t ts_now, ts_diff, ts_gps;
 
     // Block gpsdata only a minimum time
     pthread_mutex_trylock(&lock_gpsdata_update);
@@ -419,15 +424,11 @@ static void timer1_handler(size_t timer_id, void *user_data)
     packet_data.gps_lat = gpsdata.fix.latitude;
     packet_data.gps_lon = gpsdata.fix.longitude;
     packet_data.gps_alt_msl = gpsdata.fix.altMSL * METERS_TO_FEET;
-    packet_data.gps_time = (long)gpsdata.fix.time.tv_sec;
-    ts_gps = gpsdata.fix.time;
+    packet_data.gps_time = (double)gpsdata.fix.time.tv_sec;
     pthread_mutex_unlock(&lock_gpsdata_update);
-
-    (void)clock_gettime(CLOCK_REALTIME, &ts_now);
+    // Time difference calculated in GPS read thread
     timeinfo = localtime(&ts_now.tv_sec);
-    TS_SUB(&ts_diff, &ts_now, &ts_gps);
-    packet_data.tm_diff_sec = (long)ts_diff.tv_sec;
-    packet_data.tm_diff_nsec = (long)ts_diff.tv_nsec;
+    packet_data.tm_diff = TSTONS(&ts_diff);
     packet_data.tm_hour = (unsigned char)timeinfo->tm_hour;
     packet_data.tm_min = (unsigned char)timeinfo->tm_min;
     packet_data.tm_sec = (unsigned char)timeinfo->tm_sec;

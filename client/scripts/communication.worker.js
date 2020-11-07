@@ -39,8 +39,7 @@ const serverData = Object.seal({
   QFE: 0,
   QNH: 0,
   barometerHeight: 0,
-  timeDiffSec: 0,
-  timeDiffnSec: 0
+  timeDiff: 0
 });
 
 /*
@@ -103,25 +102,24 @@ function connect8080() {
       serverData.headWindspeed = dv.getFloat64(88, true);
       serverData.QFE = dv.getFloat64(96, true);
       serverData.QNH = dv.getFloat64(104, true);
-      serverData.gpsTime = getUint64(dv, 112, true);
-      serverData.timeDiffSec = getUint64(dv, 120, true);
-      serverData.timeDiffnSec = getUint64(dv, 128, true);
-      serverData.flightNumber = dv.getInt16(136, true);
-      serverData.runwayHeading = dv.getInt16(138, true);
-      serverData.windDirection = dv.getInt16(140, true);
-      serverData.year = dv.getInt16(142, true);
-      serverData.month = dv.getInt8(144, true);
-      serverData.day = dv.getInt8(145, true);
-      serverData.hour = dv.getInt8(146, true);
-      serverData.minute = dv.getInt8(147, true);
-      serverData.second = dv.getInt8(148, true);
-      serverData.humidity = dv.getInt8(149, true);
-      serverData.topNumber = dv.getInt8(150, true);
-      serverData.gpsStatus = dv.getInt8(151, true);
-      serverData.gpsMode = dv.getInt8(152, true);
-      serverData.gpsSatellitesVisible = dv.getInt8(153, true);
-      serverData.gpsSatellitesUsed = dv.getInt8(154, true);
-      serverData.recordStatus = dv.getInt8(155, true);
+      serverData.timeDiff = dv.getFloat64(112, true);
+      serverData.gpsTime = dv.getFloat64(120, true);
+      serverData.flightNumber = dv.getInt16(128, true);
+      serverData.runwayHeading = dv.getInt16(130, true);
+      serverData.windDirection = dv.getInt16(132, true);
+      serverData.year = dv.getInt16(134, true);
+      serverData.month = dv.getInt8(136, true);
+      serverData.day = dv.getInt8(137, true);
+      serverData.hour = dv.getInt8(138, true);
+      serverData.minute = dv.getInt8(139, true);
+      serverData.second = dv.getInt8(140, true);
+      serverData.humidity = dv.getInt8(141, true);
+      serverData.topNumber = dv.getInt8(142, true);
+      serverData.gpsStatus = dv.getInt8(143, true);
+      serverData.gpsMode = dv.getInt8(144, true);
+      serverData.gpsSatellitesVisible = dv.getInt8(145, true);
+      serverData.gpsSatellitesUsed = dv.getInt8(146, true);
+      serverData.recordStatus = dv.getInt8(147, true);
 
       self.postMessage({ cmd: 'data', data: serverData });
     }

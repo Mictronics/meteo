@@ -40,8 +40,24 @@ function UpdateGui(serverData) {
     serverData.second,
     0
   );
+
+  const tm_local = d.toLocaleTimeString();
+  d = new Date(0);
+  d.setUTCSeconds(serverData.gpsTime);
+
+  const tm_gps =
+    d.getUTCHours().toString(10).padStart(2, '0') +
+    ':' +
+    d.getUTCMinutes().toString(10).padStart(2, '0') +
+    ':' +
+    d.getUTCSeconds().toString(10).padStart(2, '0');
+
   document.getElementById('localDate').innerHTML = d.toLocaleDateString();
-  document.getElementById('localTime').innerHTML = d.toLocaleTimeString();
+  document.getElementById('localTime').innerHTML = `${tm_local} / ${tm_gps}`;
+
+  document.getElementById(
+    'timeDifference'
+  ).innerHTML = `${serverData.timeDiff.toPrecision(4)} sec`;
 
   // Flight and top number
   const fn = document.getElementById('flightNumberInput');
@@ -100,15 +116,6 @@ function UpdateGui(serverData) {
   ).innerHTML = `${serverData.gpsPDOP.toPrecision(
     2
   )}/${serverData.gpsHDOP.toPrecision(2)}`;
-
-  d = new Date(0);
-  d.setUTCSeconds(serverData.gpsTime);
-  document.getElementById('gpsTime').innerHTML =
-    d.getUTCHours().toString(10).padStart(2, '0') +
-    ':' +
-    d.getUTCMinutes().toString(10).padStart(2, '0') +
-    ':' +
-    d.getUTCSeconds().toString(10).padStart(2, '0');
 }
 
 // Show settings dialog
