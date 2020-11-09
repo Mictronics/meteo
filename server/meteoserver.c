@@ -9,11 +9,17 @@
 #include <sys/reboot.h>
 #include <sys/ioctl.h>
 #include <time.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <errno.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include "timespec.h"
 #include "help.h"
 #include "serial.h"
 #include "timer.h"
 #include "meteoserver.h"
+
 #define NOTUSED(V) ((void)V)
 #define WSBUFFERSIZE 512 /* Byte */
 
@@ -36,7 +42,7 @@ static unsigned char *pwsbuffer = wsbuffer;
 static int wsbuffer_len = 0;
 pthread_mutex_t lock_established_conns;
 pthread_t gps_thread;
-pthread_mutex_t lock_gpsdata_update;
+pthread_mutex_t lock_packetdata_update;
 static bool gps_thread_exit = false;
 
 /**
@@ -77,6 +83,8 @@ static struct
 } gpssource;
 static struct gps_data_t gpsdata;
 static bool gps_available = true;
+
+FILE *record_fp;
 
 /**
  * Function parsing the arguments provided on run
@@ -152,6 +160,9 @@ static size_t uint64_to_bytes(unsigned char *bytes_temp, uint64_t uint64_variabl
  */
 static void start_recording(t_start_cmd *start_cmd)
 {
+    char path[FILENAME_MAX];
+    struct stat st = {0};
+
     if (start_cmd->flight_number > 0)
     {
         packet_data.flight_number = start_cmd->flight_number;
@@ -161,7 +172,26 @@ static void start_recording(t_start_cmd *start_cmd)
     {
         packet_data.top_number = start_cmd->top_number;
     }
-    packet_data.record_status = 1;
+    // Create subfolder by date if not exists
+    snprintf(path, FILENAME_MAX, "/var/meteodata/%02u%02u%04u", packet_data.tm_mday, packet_data.tm_mon + 1, 1900 + packet_data.tm_year);
+    if (stat(path, &st) == -1)
+    {
+        mkdir(path, 0755);
+    }
+    // Create file by flight and top number
+    snprintf(path, FILENAME_MAX, "/var/meteodata/%02u%02u%04u/F%04u_REC%03u_MeteoData.csv", packet_data.tm_mday, packet_data.tm_mon + 1, 1900 + packet_data.tm_year, packet_data.flight_number, packet_data.top_number);
+    record_fp = fopen(path, "a");
+    if (record_fp != NULL)
+    {
+        // Add file header
+        fputs("TIME;TEMP;HUM;PRESSURE;DIRECTION;WIND_TOTAL;WIND_LAT;MEAN_WIND_TOTAL;MEAN_WIND_LAT;TIME;TIME_GPS_RECORDED;TIME_MAWS_RECORDED\n", record_fp);
+        fputs("seconds;degC;%;mbar;deg;kt;kt;kt;kt;HMS;HMS;HMS\n", record_fp);
+        packet_data.record_status = 1;
+    }
+    else
+    {
+        lwsl_err("Error creating log file: %s\n", strerror(errno));
+    }
 }
 
 /**
@@ -169,7 +199,11 @@ static void start_recording(t_start_cmd *start_cmd)
  */
 static void stop_recording(void)
 {
-    packet_data.top_number += 1;
+    if (record_fp != NULL)
+    {
+        fclose(record_fp);
+        packet_data.top_number += 1;
+    }
     packet_data.record_status = 0;
 }
 
@@ -199,9 +233,12 @@ static void handle_client_request(void *in, size_t len)
         if (len < 1)
             break;
         packet_data.runway_heading = (packet_data.runway_heading + 180) % 360;
-        if(packet_data.from_to_status == 0) {
+        if (packet_data.from_to_status == 0)
+        {
             packet_data.from_to_status = 1;
-        } else {
+        }
+        else
+        {
             packet_data.from_to_status = 0;
         }
         break;
@@ -347,10 +384,10 @@ static void sighandler(int sig)
     stop_timer(packet_timer);
     finalize_timer();
 
-    pthread_mutex_unlock(&lock_gpsdata_update);
+    pthread_mutex_unlock(&lock_packetdata_update);
     gps_thread_exit = true;
     pthread_join(gps_thread, NULL); /* Wait on GPS read thread exit */
-    pthread_mutex_destroy(&lock_gpsdata_update);
+    pthread_mutex_destroy(&lock_packetdata_update);
     gps_close(&gpsdata);
 
     pthread_mutex_unlock(&lock_established_conns);
@@ -372,7 +409,7 @@ void *gps_read_thread(void *arg)
     lwsl_notice("GPS read thread started.");
     while (!gps_thread_exit)
     {
-        pthread_mutex_trylock(&lock_gpsdata_update);
+        pthread_mutex_trylock(&lock_packetdata_update);
         if (gps_available)
         {
             if (gps_waiting(&gpsdata, 500000))
@@ -388,10 +425,10 @@ void *gps_read_thread(void *arg)
                 TS_SUB(&ts_diff, &ts_now, &ts_gps);
             }
         }
-        pthread_mutex_unlock(&lock_gpsdata_update);
+        pthread_mutex_unlock(&lock_packetdata_update);
     }
 
-    pthread_mutex_unlock(&lock_gpsdata_update);
+    pthread_mutex_unlock(&lock_packetdata_update);
     pthread_exit(NULL);
 }
 
@@ -421,7 +458,7 @@ static void timer1_handler(size_t timer_id, void *user_data)
     struct tm *timeinfo;
 
     // Block gpsdata only a minimum time
-    pthread_mutex_trylock(&lock_gpsdata_update);
+    pthread_mutex_trylock(&lock_packetdata_update);
     packet_data.gps_status = (unsigned char)gpsdata.status;
     packet_data.gps_mode = (unsigned char)gpsdata.fix.mode;
     packet_data.gps_satellites_visible = (unsigned char)gpsdata.satellites_visible;
@@ -432,7 +469,7 @@ static void timer1_handler(size_t timer_id, void *user_data)
     packet_data.gps_lon = gpsdata.fix.longitude;
     packet_data.gps_alt_msl = gpsdata.fix.altMSL * METERS_TO_FEET;
     packet_data.gps_time = (double)gpsdata.fix.time.tv_sec;
-    pthread_mutex_unlock(&lock_gpsdata_update);
+    pthread_mutex_unlock(&lock_packetdata_update);
     // Time difference calculated in GPS read thread
     timeinfo = localtime(&ts_now.tv_sec);
     packet_data.tm_diff = TSTONS(&ts_diff);
