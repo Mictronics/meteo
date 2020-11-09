@@ -19,8 +19,8 @@ static struct argp_option options[] =
         {0, 0, 0, 0, "Options:", 1},
         {"ip", 'i', "IP", OPTION_ARG_OPTIONAL, "Listen IP address or host [default: 127.0.0.1]", 1},
         {"port", 'p', "port", OPTION_ARG_OPTIONAL, "Listen port [default: 8080]", 1},
-        {"serial", OPTSERIAL, "serial device", OPTION_ARG_OPTIONAL, "Serial device [default: /dev/ttyAMA0]", 1},
-        {"baudrate", OPTBAUDRATE, "baudrate", OPTION_ARG_OPTIONAL, "Serial baudrate [default: 115200]", 1},
+        {"serial", OPTSERIAL, "serial device", OPTION_ARG_OPTIONAL, "Serial device [default: /dev/ttyUSB0]", 1},
+        {"baudrate", OPTBAUDRATE, "baudrate", OPTION_ARG_OPTIONAL, "Serial baudrate [default: 9600]", 1},
         {"group", OPTGROUP, "group id", OPTION_ARG_OPTIONAL, "Websocket group id [default: -1]", 1},
         {"user", OPTUSER, "user id", OPTION_ARG_OPTIONAL, "Websocket user id [default: -1]", 1},
 #ifndef LWS_NO_DAEMONIZE

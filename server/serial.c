@@ -9,8 +9,8 @@
 #include "serial.h"
 
 char serial_name[255] = "";
-const char *serial_interface = "/dev/ttyAMA0";
-int baudrate = B115200;
+const char *serial_interface = "/dev/ttyUSB0";
+int baudrate = B9600;
 int serialfd = -1;
 
 void set_baudrate(const char *arg)
@@ -52,8 +52,8 @@ void set_baudrate(const char *arg)
         baudrate = B115200;
         break;
     default:
-        baudrate = B115200;
-        fprintf(stderr, "Baudrate %ld not supported. Set by default 115200 Baud.\n", br);
+        baudrate = B9600;
+        fprintf(stderr, "Baudrate %ld not supported. Set by default 9600 Baud.\n", br);
         break;
     }
 }
@@ -86,24 +86,26 @@ int open_serial(void)
     memset(&tios, 0, sizeof(tios));
     tios.c_iflag = 0;
     tios.c_oflag = 0;
-    tios.c_cflag |= CS8 | CREAD | CLOCAL; /* 8N1 no handshake*/
-    tios.c_lflag = 0;
+    tios.c_cflag |= CS8 | CREAD | CLOCAL; // 8N1 no handshake
+    tios.c_lflag = ICANON;                // Read line by line
     tios.c_cc[VMIN] = 1;
     tios.c_cc[VTIME] = 1;
 
     if (cfsetispeed(&tios, baudrate) < 0)
     {
-        fprintf(stderr, "Serial cfsetispeed(%s, 115200): %s\n",
+        fprintf(stderr, "Serial cfsetispeed(%s): %s\n",
                 serial_interface, strerror(errno));
         return (EXIT_FAILURE);
     }
 
     if (cfsetospeed(&tios, baudrate) < 0)
     {
-        fprintf(stderr, "Serial cfsetospeed(%s, 115200): %s\n",
+        fprintf(stderr, "Serial cfsetospeed(%s): %s\n",
                 serial_interface, strerror(errno));
         return (EXIT_FAILURE);
     }
+
+    tcflush(serialfd, TCIFLUSH);
 
     if (tcsetattr(serialfd, TCSANOW, &tios) < 0)
     {
@@ -111,6 +113,10 @@ int open_serial(void)
                 serial_interface, strerror(errno));
         return (EXIT_FAILURE);
     }
+
+    // Kick on handshake and start reception
+    //int RTSDTR_flag = TIOCM_RTS | TIOCM_DTR;
+    //ioctl(Modes.beast_fd, TIOCMBIS, &RTSDTR_flag); //Set RTS&DTR pin
 
     return EXIT_SUCCESS;
 }
