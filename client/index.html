@@ -27,58 +27,63 @@
       >
         <div class="row">
           <div class="col-5 text-black-50">Temperature [°C]</div>
-          <div class="col-3">---</div>
-          <div class="col-3">---</div>
+          <div id="temperature" class="col-3">---</div>
         </div>
         <div class="row">
           <div class="col-5 text-black-50">Humitity [%]</div>
-          <div class="col-3">---</div>
-          <div class="col-3">---</div>
+          <div id="humidity" class="col-3">---</div>
         </div>
         <div class="row">
           <div class="col-5 text-black-50">Pressure [hPa]</div>
-          <div class="col-3">---</div>
-          <div class="col-3">---</div>
+          <div id="pressure" class="col-3">---</div>
         </div>
         <div class="row">
           <div class="col-5 text-black-50">QFE [hPa]</div>
-          <div class="col-3">---</div>
-          <div class="col-3">---</div>
+          <div id="qfe" class="col-3">---</div>
         </div>
         <div class="row">
           <div class="col-5 text-black-50">QNH [hPa]</div>
-          <div class="col-3">---</div>
-          <div class="col-3">---</div>
+          <div id="qnh" class="col-3">---</div>
         </div>
         <div class="row">
           <div class="col-5 text-black-50">Wind Direction [kts]</div>
-          <div class="col-3">---</div>
-          <div class="col-3">---</div>
+          <div id="windDirection" class="col-3">---</div>
         </div>
         <div class="row">
           <div class="col-5 text-black-50">Wind Speed [kts]</div>
-          <div class="col-3">---</div>
-          <div class="col-3">---</div>
+          <div id="windspeed" class="col-3">---</div>
         </div>
         <div class="row">
           <div class="col-5 text-black-50">Cross Wind [kts]</div>
-          <div class="col-3">---</div>
-          <div class="col-3">---</div>
+          <div id="crossWindspeed" class="col-3">---</div>
         </div>
         <div class="row">
           <div class="col-5 text-black-50">Head Wind [kts]</div>
-          <div class="col-3">---</div>
-          <div class="col-3">---</div>
+          <div id="headWindspeed" class="col-3">---</div>
         </div>
         <div class="row">
           <div class="col-5 text-black-50">Elevation [ft]</div>
-          <div class="col-3">---</div>
-          <div class="col-3">---</div>
+          <div class="col-3">
+            <input
+              type="number"
+              class="form-control"
+              id="elevationInput"
+              min="0"
+              max="29030"
+            />
+          </div>
         </div>
         <div class="row">
           <div class="col-5 text-black-50">Runway Heading [°]</div>
-          <div class="col-3">---</div>
-          <div class="col-3">---</div>
+          <div class="col-3">
+            <input
+              type="number"
+              class="form-control"
+              id="runwayHeadingInput"
+              min="0"
+              max="360"
+            />
+          </div>
         </div>
       </div>
       <div
@@ -186,21 +191,18 @@
       >
         <span class="text-black-50">Date & Time</span>
         <div id="localDate">--.--.----</div>
-        <span class="text-black-50">Local / GPS UTC</span>
+        <span class="text-black-50">Station / GPS UTC</span>
         <div id="localTime">--:--:-- / --:--:--</div>
         <span class="text-black-50">Difference</span>
         <div id="timeDifference">---</div>
       </div>
-      <div class="d-flex flex-column justify-content-around element-border p-1">
-        <button id="settingsButton" type="button" class="btn btn-info">
-          Settings
-        </button>
-      </div>
       <div
         class="d-flex flex-column justify-content-start element-border p-2 text-center"
       >
-        <span class="text-black-50">Link</span>
+        <span class="text-black-50">Link Speed</span>
         <div id="linkSpeed">---</div>
+        <span class="text-black-50">Record Files</span>
+        <a href="#" class="btn btn-info stretched-link">Download</a>
       </div>
     </div>
     <footer class="font-weight-lighter fix-bottom float-right">
