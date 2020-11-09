@@ -30,10 +30,10 @@ case "$1" in
         then
             adduser --system --home /usr/share/$NAME --no-create-home --quiet "$RUNAS"
         fi
-        # dialout required for ttyAMA0 access
+        # dialout required for ttyACM0 access
         adduser "$RUNAS" dialout
-        # add executable capability to poweroff system
-        setcap cap_sys_boot+ep /usr/bin/meteoserver
+        # Create folder to record meteo data
+        mkdir -p /var/meteodata
     ;;
 
     abort-upgrade|abort-remove|abort-deconfigure)
