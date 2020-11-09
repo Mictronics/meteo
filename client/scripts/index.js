@@ -3,9 +3,7 @@ let topNumber = -1;
 let recordStatus = -1;
 
 // Create worker thread for server communication.
-const serverCommunicationWorker = new Worker(
-  './scripts/communication.worker.js'
-);
+const serverCommunicationWorker = new Worker('./scripts/communication.worker.js');
 
 const gpsStatus = [
   'No Fix', // No Fix
@@ -54,9 +52,7 @@ function UpdateGui(serverData) {
   document.getElementById('localDate').innerHTML = d.toLocaleDateString();
   document.getElementById('localTime').innerHTML = `${tm_local} / ${tm_gps}`;
 
-  document.getElementById(
-    'timeDifference'
-  ).innerHTML = `${serverData.timeDiff.toPrecision(4)} sec`;
+  document.getElementById('timeDifference').innerHTML = `${serverData.timeDiff.toPrecision(4)} sec`;
 
   // Flight and top number
   const fn = document.getElementById('flightNumberInput');
@@ -95,37 +91,36 @@ function UpdateGui(serverData) {
   }
 
   // GPS Information
-  document.getElementById(
-    'gpsLat'
-  ).innerHTML = `${serverData.gpsLat.toPrecision(8)}°`;
-  document.getElementById(
-    'gpsLon'
-  ).innerHTML = `${serverData.gpsLon.toPrecision(8)}°`;
-  document.getElementById(
-    'gpsAltMsl'
-  ).innerHTML = `${serverData.gpsAltMsl.toPrecision(5)}`;
+  document.getElementById('gpsLat').innerHTML = `${serverData.gpsLat.toFixed(6)}°`;
+  document.getElementById('gpsLon').innerHTML = `${serverData.gpsLon.toFixed(6)}°`;
+  document.getElementById('gpsAltMsl').innerHTML = `${serverData.gpsAltMsl.toFixed(1)}`;
   document.getElementById(
     'gpsSatellites'
   ).innerHTML = `${serverData.gpsSatellitesUsed}/${serverData.gpsSatellitesVisible}`;
-  document.getElementById('gpsStatus').innerHTML = `${
-    gpsMode[serverData.gpsMode]
-  } ${gpsStatus[serverData.gpsStatus]}`;
-  document.getElementById(
-    'gpsDOP'
-  ).innerHTML = `${serverData.gpsPDOP.toPrecision(
-    2
-  )}/${serverData.gpsHDOP.toPrecision(2)}`;
+  document.getElementById('gpsStatus').innerHTML = `${gpsMode[serverData.gpsMode]} ${gpsStatus[serverData.gpsStatus]}`;
+  document.getElementById('gpsDOP').innerHTML = `${serverData.gpsPDOP.toFixed(1)}/${serverData.gpsHDOP.toFixed(1)}`;
 
+  // From-To button status
   const btn = document.getElementById('fromToButton');
   if (serverData.fromToStatus) {
     btn.classList.replace('btn-secondary', 'btn-warning');
   } else {
     btn.classList.replace('btn-warning', 'btn-secondary');
   }
-}
 
-// Show settings dialog
-function OnSettingsButtonClick(ev) {}
+  // Weather information
+  document.getElementById('temperature').innerHTML = serverData.temperature.toFixed(1);
+  document.getElementById('humidity').innerHTML = serverData.humidity.toFixed(0);
+  document.getElementById('pressure').innerHTML = serverData.baroPressure.toFixed(1);
+  document.getElementById('qnh').innerHTML = `${serverData.QNH.toFixed(1)}`;
+  document.getElementById('qfe').innerHTML = `${serverData.QFE.toFixed(1)}`;
+  document.getElementById('windDirectionMean').innerHTML = `${serverData.windDirectionMean.toFixed(0)}`;
+  document.getElementById('windspeedMean').innerHTML = `${serverData.windspeedMean.toFixed(1)}`;
+  document.getElementById('windDirection').innerHTML = `${serverData.windDirection.toFixed(0)}`;
+  document.getElementById('windspeed').innerHTML = `${serverData.windspeed.toFixed(1)}`;
+  document.getElementById('crossWindspeed').innerHTML = `${serverData.crossWindspeed.toFixed(1)}`;
+  document.getElementById('headWindspeed').innerHTML = `${serverData.headWindspeed.toFixed(1)}`;
+}
 
 // Start/stop recording
 function OnRecordButtonClick(ev) {
@@ -133,10 +128,7 @@ function OnRecordButtonClick(ev) {
     serverCommunicationWorker.postMessage({
       cmd: 'start',
       data: {
-        flightNumber: Number.parseInt(
-          document.getElementById('flightNumberInput').value,
-          10
-        ),
+        flightNumber: Number.parseInt(document.getElementById('flightNumberInput').value, 10),
         topNumber
       }
     });
@@ -196,15 +188,8 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   // Add button click events
-  document
-    .getElementById('settingsButton')
-    .addEventListener('click', OnSettingsButtonClick);
-  document
-    .getElementById('recordButton')
-    .addEventListener('click', OnRecordButtonClick);
-  document
-    .getElementById('fromToButton')
-    .addEventListener('click', OnFromToButtonClick);
+  document.getElementById('recordButton').addEventListener('click', OnRecordButtonClick);
+  document.getElementById('fromToButton').addEventListener('click', OnFromToButtonClick);
 
   // Finally, connect to weather station
   serverCommunicationWorker.postMessage({
