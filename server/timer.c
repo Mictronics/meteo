@@ -9,6 +9,7 @@
 #include <time.h>
 #include "timer.h"
 
+#define NOTUSED(V) ((void)V)
 #define MAX_TIMER_COUNT 1000
 
 struct timer_node
@@ -123,7 +124,7 @@ void finalize_timer()
     pthread_join(g_thread_id, NULL);
 }
 
-struct timer_node *_get_timer_from_fd(int fd)
+static struct timer_node *_get_timer_from_fd(int fd)
 {
     struct timer_node *tmp = g_head;
 
@@ -139,6 +140,7 @@ struct timer_node *_get_timer_from_fd(int fd)
 
 void *_timer_thread(void *data)
 {
+    NOTUSED(data);
     struct pollfd ufds[MAX_TIMER_COUNT] = {{0}};
     int iMaxCount = 0;
     struct timer_node *tmp = NULL;
