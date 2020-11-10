@@ -20,8 +20,21 @@
 #include "timer.h"
 #include "meteoserver.h"
 
+#define TESTSERIAL
+
+#ifdef TESTSERIAL
+FILE *test_fp;
+char test_buf[1024];
+size_t test_timer = 0;
+#endif
+
 #define NOTUSED(V) ((void)V)
 #define WSBUFFERSIZE 512 /* Byte */
+#define EARTH_G 9.80665
+#define R 287.05287
+#define TREF 288.15
+#define ALPHA -0.0065
+#define MOVING_AVG_LENGTH 30 // Moving average length in seconds
 
 static int debug_level = 0;
 static int uid = -1, gid = -1, num_clients = 0;
@@ -42,8 +55,10 @@ static unsigned char *pwsbuffer = wsbuffer;
 static int wsbuffer_len = 0;
 pthread_mutex_t lock_established_conns;
 pthread_t gps_thread;
+pthread_t serial_thread;
 pthread_mutex_t lock_packetdata_update;
 static bool gps_thread_exit = false;
+static bool serial_thread_exit = false;
 
 /**
  * One of these is created for each client connecting.
@@ -84,7 +99,18 @@ static struct
 static struct gps_data_t gpsdata;
 static bool gps_available = true;
 
-FILE *record_fp;
+static FILE *record_fp;
+
+// Storage for moving average over 30s
+static double temperature_arr[MOVING_AVG_LENGTH];
+static unsigned char humidity_arr[MOVING_AVG_LENGTH];
+static double windspeed_arr[MOVING_AVG_LENGTH];
+static unsigned short wind_direction_arr[MOVING_AVG_LENGTH];
+static unsigned char moving_avg_index = 0;
+
+static unsigned short runway_elevation = 1204; //Elevation[ft](Manching)
+static unsigned char height_qfe = 1;           // Height difference between barometer and reference level[m]
+static unsigned short runway_heading = 248;    // Runway heading[deg](Manching)
 
 /**
  * Function parsing the arguments provided on run
@@ -138,30 +164,14 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state)
 }
 
 /**
- * Convert a double into byte buffer
- */
-static size_t double_to_bytes(unsigned char *bytes_temp, double double_variable)
-{
-    memcpy(bytes_temp, (unsigned char *)(&double_variable), sizeof(double));
-    return sizeof(double);
-}
-
-/**
- * Convert a uint64_t into byte buffer
- */
-static size_t uint64_to_bytes(unsigned char *bytes_temp, uint64_t uint64_variable)
-{
-    memcpy(bytes_temp, (unsigned char *)(&uint64_variable), sizeof(uint64_t));
-    return sizeof(uint64_t);
-}
-
-/**
  * Start recording.
  */
 static void start_recording(t_start_cmd *start_cmd)
 {
     char path[FILENAME_MAX];
     struct stat st = {0};
+    time_t now = time(NULL);
+    struct tm *t = localtime(&now);
 
     if (start_cmd->flight_number > 0)
     {
@@ -173,13 +183,13 @@ static void start_recording(t_start_cmd *start_cmd)
         packet_data.top_number = start_cmd->top_number;
     }
     // Create subfolder by date if not exists
-    snprintf(path, FILENAME_MAX, "/var/meteodata/%02u%02u%04u", packet_data.tm_mday, packet_data.tm_mon + 1, 1900 + packet_data.tm_year);
+    snprintf(path, FILENAME_MAX, "/var/meteodata/%02u%02u%04u", t->tm_mday, t->tm_mon + 1, 1900 + t->tm_year);
     if (stat(path, &st) == -1)
     {
         mkdir(path, 0755);
     }
     // Create file by flight and top number
-    snprintf(path, FILENAME_MAX, "/var/meteodata/%02u%02u%04u/F%04u_REC%03u_MeteoData.csv", packet_data.tm_mday, packet_data.tm_mon + 1, 1900 + packet_data.tm_year, packet_data.flight_number, packet_data.top_number);
+    snprintf(path, FILENAME_MAX, "/var/meteodata/%02u%02u%04u/F%04u_REC%03u_MeteoData.csv", t->tm_mday, t->tm_mon + 1, 1900 + t->tm_year, packet_data.flight_number, packet_data.top_number);
     record_fp = fopen(path, "a");
     if (record_fp != NULL)
     {
@@ -213,6 +223,7 @@ static void stop_recording(void)
 static void handle_client_request(void *in, size_t len)
 {
     unsigned char *id = (unsigned char *)in;
+    t_ushort_cmd *p = (t_ushort_cmd *)in;
 
     switch (*id)
     {
@@ -232,7 +243,7 @@ static void handle_client_request(void *in, size_t len)
         // Change runway heading from to status
         if (len < 1)
             break;
-        packet_data.runway_heading = (packet_data.runway_heading + 180) % 360;
+        runway_heading = (runway_heading + 180) % 360;
         if (packet_data.from_to_status == 0)
         {
             packet_data.from_to_status = 1;
@@ -241,6 +252,18 @@ static void handle_client_request(void *in, size_t len)
         {
             packet_data.from_to_status = 0;
         }
+        break;
+    case SERVER_CMD_ELEVATION:
+        // Change runway elevation
+        if (len < 3)
+            break;
+        runway_elevation = p->val;
+        break;
+    case SERVER_CMD_HEADING:
+        // Change runway heading
+        if (len < 3)
+            break;
+        runway_heading = p->val;
         break;
     default:
         break;
@@ -257,7 +280,7 @@ static int callback_broadcast(struct lws *wsi, enum lws_callback_reasons reason,
             lws_protocol_vh_priv_get(lws_get_vhost(wsi),
                                      lws_get_protocol(wsi));
     char buf[32];
-    int n, m;
+    int m;
 
     switch (reason)
     {
@@ -376,12 +399,34 @@ static struct lws_protocols protocols[] = {
 };
 
 /**
+ * Set affinity of calling thread to specific core on a multi-core CPU
+ */
+static int thread_to_core(int core_id)
+{
+    int num_cores = sysconf(_SC_NPROCESSORS_ONLN);
+    if (core_id < 0 || core_id >= num_cores)
+        return EINVAL;
+
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    CPU_SET(core_id, &cpuset);
+
+    pthread_t current_thread = pthread_self();
+    return pthread_setaffinity_np(current_thread, sizeof(cpu_set_t), &cpuset);
+}
+
+/**
  * Incoming signal handler. Close server nice and clean.
  */
 static void sighandler(int sig)
 {
     NOTUSED(sig);
     stop_timer(packet_timer);
+
+#ifdef TESTSERIAL
+    stop_timer(test_timer);
+#endif
+
     finalize_timer();
 
     pthread_mutex_unlock(&lock_packetdata_update);
@@ -396,6 +441,11 @@ static void sighandler(int sig)
     close_serial();
     lws_cancel_service(context);
     lws_context_destroy(context);
+
+#ifdef TESTSERIAL
+    fclose(test_fp);
+#endif
+
     exit(EXIT_SUCCESS);
 }
 
@@ -403,9 +453,10 @@ static void sighandler(int sig)
  * GPS read thread.
  * This need its own thread to avoid delays in time update.
  */
-void *gps_read_thread(void *arg)
+static void *gps_read_thread(void *arg)
 {
     NOTUSED(arg);
+    thread_to_core(2);
     lwsl_notice("GPS read thread started.");
     while (!gps_thread_exit)
     {
@@ -433,20 +484,112 @@ void *gps_read_thread(void *arg)
 }
 
 /**
- * Set affinity of calling thread to specific core on a multi-core CPU
+ * Serial read thread.
  */
-static int thread_to_core(int core_id)
+static void *serial_read_thread(void *arg)
 {
-    int num_cores = sysconf(_SC_NPROCESSORS_ONLN);
-    if (core_id < 0 || core_id >= num_cores)
-        return EINVAL;
+    NOTUSED(arg);
+    thread_to_core(3);
+    lwsl_notice("Serial read thread started.");
+    if (open_serial() == EXIT_FAILURE)
+    {
+        lwsl_err("Serial device init failed\n");
+        serial_thread_exit = true;
+    };
+    char *buf;
+    ssize_t len = 0;
+    int items = 0;
+    double temperature;
+    double temperature_mean;
+    double pressure;
+    double windspeed;
+    double windspeed_mean;
+    double cross_windspeed;
+    double head_windspeed;
+    double qfe;
+    double qnh;
+    unsigned short wind_direction;
+    double wind_direction_mean;
+    unsigned char hour;
+    unsigned char min;
+    unsigned char sec;
+    unsigned char humidity;
+    double humidity_mean;
 
-    cpu_set_t cpuset;
-    CPU_ZERO(&cpuset);
-    CPU_SET(core_id, &cpuset);
+    while (!serial_thread_exit)
+    {
+        buf = read_serial(&len);
+        if (len > 0)
+        {
+            items = sscanf(buf, "%lf\t%hhu\t%lf\t%lf\t%hu\t%hhu\t%hhu\t%hhu", &temperature, &humidity, &pressure, &windspeed, &wind_direction, &hour, &min, &sec);
+            if (items == 8)
+            {
+                // Fill arrays before we calculate average
+                if (moving_avg_index < MOVING_AVG_LENGTH)
+                {
+                    temperature_arr[moving_avg_index] = temperature;
+                    humidity_arr[moving_avg_index] = humidity;
+                    windspeed_arr[moving_avg_index] = windspeed;
+                    wind_direction_arr[moving_avg_index] = wind_direction;
+                    moving_avg_index += 1;
+                }
+                else
+                {
+                    // Left shift all arrays
+                    memmove(&temperature_arr[0], &temperature_arr[1], (MOVING_AVG_LENGTH - 1) * sizeof(double));
+                    memmove(&humidity_arr[0], &humidity_arr[1], (MOVING_AVG_LENGTH - 1) * sizeof(unsigned char));
+                    memmove(&windspeed_arr[0], &windspeed_arr[1], (MOVING_AVG_LENGTH - 1) * sizeof(double));
+                    memmove(&wind_direction_arr[0], &wind_direction_arr[1], (MOVING_AVG_LENGTH - 1) * sizeof(unsigned short));
+                    // Add new value at the end
+                    temperature_arr[MOVING_AVG_LENGTH - 1] = temperature;
+                    humidity_arr[MOVING_AVG_LENGTH - 1] = humidity;
+                    windspeed_arr[MOVING_AVG_LENGTH - 1] = windspeed;
+                    wind_direction_arr[MOVING_AVG_LENGTH - 1] = wind_direction;
+                    // Calculate average
+                    for (int i = 0; i < MOVING_AVG_LENGTH; i++)
+                    {
+                        temperature_mean += temperature_arr[i];
+                        humidity_mean += humidity_arr[i];
+                        windspeed_mean += windspeed_arr[i];
+                        wind_direction_mean += wind_direction_arr[i];
+                    }
 
-    pthread_t current_thread = pthread_self();
-    return pthread_setaffinity_np(current_thread, sizeof(cpu_set_t), &cpuset);
+                    temperature_mean /= (double)MOVING_AVG_LENGTH;
+                    humidity_mean /= (double)MOVING_AVG_LENGTH;
+                    windspeed_mean /= (double)MOVING_AVG_LENGTH;
+                    wind_direction_mean /= (double)MOVING_AVG_LENGTH;
+                }
+
+                double elev = runway_elevation * 0.3048;
+                qfe = pressure * (1.0 + (height_qfe * EARTH_G) / (R * temperature));
+                qnh = qfe * exp((elev * EARTH_G) / (R * (TREF + (ALPHA * elev) / 2.0)));
+
+                // Block mutex only minimum of time
+                pthread_mutex_trylock(&lock_packetdata_update);
+                packet_data.baro_qfe = qfe;
+                packet_data.baro_qnh = qnh;
+                packet_data.temperature = temperature_mean;
+                packet_data.humidity = humidity_mean;
+                packet_data.wind_direction = wind_direction;
+                packet_data.wind_direction_mean = wind_direction_mean;
+                packet_data.windspeed = windspeed;
+                packet_data.windspeed_mean = windspeed_mean;
+                packet_data.baro_pressure = pressure;
+                packet_data.maws_hour = hour;
+                packet_data.maws_min = min;
+                packet_data.maws_sec = sec;
+                pthread_mutex_unlock(&lock_packetdata_update);
+            }
+        }
+        else if (len < 0)
+        {
+            lwsl_err("Error from read: %ld: %s\n", len, strerror(errno));
+        }
+    }
+
+    close_serial();
+    pthread_mutex_unlock(&lock_packetdata_update);
+    pthread_exit(NULL);
 }
 
 /**
@@ -455,8 +598,8 @@ static int thread_to_core(int core_id)
  */
 static void timer1_handler(size_t timer_id, void *user_data)
 {
-    struct tm *timeinfo;
-
+    NOTUSED(timer_id);
+    NOTUSED(user_data);
     // Block gpsdata only a minimum time
     pthread_mutex_trylock(&lock_packetdata_update);
     packet_data.gps_status = (unsigned char)gpsdata.status;
@@ -469,19 +612,114 @@ static void timer1_handler(size_t timer_id, void *user_data)
     packet_data.gps_lon = gpsdata.fix.longitude;
     packet_data.gps_alt_msl = gpsdata.fix.altMSL * METERS_TO_FEET;
     packet_data.gps_time = (double)gpsdata.fix.time.tv_sec;
+    packet_data.runway_elevation = runway_elevation;
+    packet_data.runway_heading = runway_heading;
     pthread_mutex_unlock(&lock_packetdata_update);
-    // Time difference calculated in GPS read thread
-    timeinfo = localtime(&ts_now.tv_sec);
-    packet_data.tm_diff = TSTONS(&ts_diff);
-    packet_data.tm_hour = (unsigned char)timeinfo->tm_hour;
-    packet_data.tm_min = (unsigned char)timeinfo->tm_min;
-    packet_data.tm_sec = (unsigned char)timeinfo->tm_sec;
-    packet_data.tm_mday = (unsigned char)timeinfo->tm_mday;
-    packet_data.tm_mon = (unsigned char)timeinfo->tm_mon;
-    packet_data.tm_year = (unsigned short)timeinfo->tm_year;
 
     lws_callback_on_writable_all_protocol(context, &protocols[1]);
 }
+
+#ifdef TESTSERIAL
+static void test_handler(size_t timer_id, void *user_data)
+{
+    NOTUSED(timer_id);
+    NOTUSED(user_data);
+
+    char *buf;
+    ssize_t len = 0;
+    int items = 0;
+    double temperature;
+    double temperature_mean;
+    double pressure;
+    double windspeed;
+    double windspeed_mean;
+    double cross_windspeed;
+    double head_windspeed;
+    double qfe;
+    double qnh;
+    unsigned short wind_direction;
+    double wind_direction_mean;
+    unsigned char hour;
+    unsigned char min;
+    unsigned char sec;
+    unsigned char humidity;
+    double humidity_mean;
+
+    if (fgets(test_buf, 1024, test_fp) == NULL)
+    {
+        return;
+    }
+
+    buf = test_buf;
+    len = 52;
+    if (len > 0)
+    {
+        items = sscanf(buf, "%lf\t%hhu\t%lf\t%lf\t%hu\t%hhu\t%hhu\t%hhu", &temperature, &humidity, &pressure, &windspeed, &wind_direction, &hour, &min, &sec);
+        if (items == 8)
+        {
+            // Fill arrays before we calculate average
+            if (moving_avg_index < MOVING_AVG_LENGTH)
+            {
+                temperature_arr[moving_avg_index] = temperature;
+                humidity_arr[moving_avg_index] = humidity;
+                windspeed_arr[moving_avg_index] = windspeed;
+                wind_direction_arr[moving_avg_index] = wind_direction;
+                moving_avg_index += 1;
+            }
+            else
+            {
+                // Left shift all arrays
+                memmove(&temperature_arr[0], &temperature_arr[1], (MOVING_AVG_LENGTH - 1) * sizeof(double));
+                memmove(&humidity_arr[0], &humidity_arr[1], (MOVING_AVG_LENGTH - 1) * sizeof(unsigned char));
+                memmove(&windspeed_arr[0], &windspeed_arr[1], (MOVING_AVG_LENGTH - 1) * sizeof(double));
+                memmove(&wind_direction_arr[0], &wind_direction_arr[1], (MOVING_AVG_LENGTH - 1) * sizeof(unsigned short));
+                // Add new value at the end
+                temperature_arr[MOVING_AVG_LENGTH - 1] = temperature;
+                humidity_arr[MOVING_AVG_LENGTH - 1] = humidity;
+                windspeed_arr[MOVING_AVG_LENGTH - 1] = windspeed;
+                wind_direction_arr[MOVING_AVG_LENGTH - 1] = wind_direction;
+                // Calculate average
+                for (int i = 0; i < MOVING_AVG_LENGTH; i++)
+                {
+                    temperature_mean += temperature_arr[i];
+                    humidity_mean += humidity_arr[i];
+                    windspeed_mean += windspeed_arr[i];
+                    wind_direction_mean += wind_direction_arr[i];
+                }
+
+                temperature_mean /= (double)MOVING_AVG_LENGTH;
+                humidity_mean /= (double)MOVING_AVG_LENGTH;
+                windspeed_mean /= (double)MOVING_AVG_LENGTH;
+                wind_direction_mean /= (double)MOVING_AVG_LENGTH;
+            }
+
+            double elev = runway_elevation * 0.3048;
+            qfe = pressure * (1.0 + ((height_qfe * EARTH_G) / (R * (temperature + 273.15))));
+            qnh = qfe * exp((elev * EARTH_G) / (R * (TREF + (ALPHA * elev) / 2.0)));
+
+            // Block mutex only minimum time
+            pthread_mutex_trylock(&lock_packetdata_update);
+            packet_data.baro_qfe = qfe;
+            packet_data.baro_qnh = qnh;
+            packet_data.temperature = temperature_mean;
+            packet_data.humidity = humidity_mean;
+            packet_data.wind_direction = wind_direction;
+            packet_data.wind_direction_mean = wind_direction_mean;
+            packet_data.windspeed = windspeed;
+            packet_data.windspeed_mean = windspeed_mean;
+            packet_data.baro_pressure = pressure;
+            packet_data.maws_hour = hour;
+            packet_data.maws_min = min;
+            packet_data.maws_sec = sec;
+            pthread_mutex_unlock(&lock_packetdata_update);
+        }
+    }
+    else if (len < 0)
+    {
+        lwsl_err("Error from read: %ld: %s\n", len, strerror(errno));
+    }
+}
+#endif
 
 /**
  * Well, it's main.
@@ -489,6 +727,11 @@ static void timer1_handler(size_t timer_id, void *user_data)
 int main(int argc, char **argv)
 {
     memset(&packet_data, 0, sizeof(packet_data));
+    packet_data.runway_elevation = runway_elevation;
+    packet_data.runway_heading = runway_heading;
+    packet_data.barometer_height = height_qfe;
+    packet_data.baro_qfe = 1013.25;
+    packet_data.baro_qnh = 1013.25;
 
     /* On a multi-core CPU we run the main thread and reader thread on different cores.
      * Try sticking the main thread to core 1
@@ -547,10 +790,8 @@ int main(int argc, char **argv)
     info.max_http_header_pool = 16;
     info.timeout_secs = 5;
 
-    if (open_serial() == EXIT_FAILURE)
-    {
-        lwsl_err("Serial device init failed\n");
-    };
+    /* Start reading serial data from weather station */
+    pthread_create(&serial_thread, NULL, serial_read_thread, NULL);
 
     /* Initialize GPS data so we read back zero if no GPS is available */
     memset(&gpsdata, 0, sizeof(gpsdata));
@@ -585,6 +826,11 @@ int main(int argc, char **argv)
 
     initialize_timer();
     packet_timer = start_timer(500, timer1_handler, TIMER_PERIODIC, NULL);
+
+#ifdef TESTSERIAL
+    test_fp = fopen("/tmp/vaisalla_log.txt", "r");
+    test_timer = start_timer(1000, test_handler, TIMER_PERIODIC, NULL);
+#endif
 
     // Infinite loop, to end this server send SIGTERM. (CTRL+C) */
     for (;;)
