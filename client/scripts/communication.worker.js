@@ -2,7 +2,9 @@
 const ServerCmd = Object.freeze({
   Start: 0x1a,
   Stop: 0x2b,
-  FromTo: 0x3c
+  FromTo: 0x3c,
+  Elevation: 0x4d,
+  Heading: 0x5e
 });
 
 /*
@@ -10,9 +12,9 @@ const ServerCmd = Object.freeze({
  */
 const serverData = Object.seal({
   recordStatus: 0,
-  second: 0,
-  minute: 0,
-  hour: 0,
+  maws_second: 0,
+  maws_minute: 0,
+  maws_hour: 0,
   day: 0,
   month: 0,
   year: 0,
@@ -42,8 +44,7 @@ const serverData = Object.seal({
   headWindspeed: 0,
   QFE: 0,
   QNH: 0,
-  barometerHeight: 0,
-  timeDiff: 0
+  barometerHeight: 0
 });
 
 /*
@@ -94,36 +95,33 @@ function connect8080() {
       serverData.gpsLat = dv.getFloat64(16, true);
       serverData.gpsLon = dv.getFloat64(24, true);
       serverData.gpsAltMsl = dv.getFloat64(32, true);
-      serverData.barometerHeight = dv.getFloat64(40, true);
-      serverData.runwayElevation = dv.getFloat64(48, true);
-      serverData.temperature = dv.getFloat64(56, true);
-      serverData.baroPressure = dv.getFloat64(64, true);
-      serverData.windspeed = dv.getFloat64(72, true);
-      serverData.windspeedMean = dv.getFloat64(80, true);
-      serverData.crossWindspeed = dv.getFloat64(88, true);
-      serverData.headWindspeed = dv.getFloat64(96, true);
-      serverData.QFE = dv.getFloat64(104, true);
-      serverData.QNH = dv.getFloat64(112, true);
-      serverData.timeDiff = dv.getFloat64(120, true);
-      serverData.gpsTime = dv.getFloat64(128, true);
-      serverData.flightNumber = dv.getInt16(136, true);
-      serverData.runwayHeading = dv.getInt16(138, true);
-      serverData.windDirection = dv.getInt16(140, true);
-      serverData.windDirectionMean = dv.getInt16(142, true);
-      serverData.year = dv.getInt16(144, true);
-      serverData.month = dv.getInt8(146, true);
-      serverData.day = dv.getInt8(147, true);
-      serverData.hour = dv.getInt8(148, true);
-      serverData.minute = dv.getInt8(149, true);
-      serverData.second = dv.getInt8(150, true);
-      serverData.humidity = dv.getInt8(151, true);
-      serverData.topNumber = dv.getInt8(152, true);
-      serverData.gpsStatus = dv.getInt8(153, true);
-      serverData.gpsMode = dv.getInt8(154, true);
-      serverData.gpsSatellitesVisible = dv.getInt8(155, true);
-      serverData.gpsSatellitesUsed = dv.getInt8(156, true);
-      serverData.recordStatus = dv.getInt8(157, true);
-      serverData.fromToStatus = dv.getInt8(158, true);
+      serverData.temperature = dv.getFloat64(40, true);
+      serverData.baroPressure = dv.getFloat64(48, true);
+      serverData.windspeed = dv.getFloat64(56, true);
+      serverData.windspeedMean = dv.getFloat64(64, true);
+      serverData.crossWindspeed = dv.getFloat64(72, true);
+      serverData.headWindspeed = dv.getFloat64(80, true);
+      serverData.QFE = dv.getFloat64(88, true);
+      serverData.QNH = dv.getFloat64(96, true);
+      serverData.gpsTime = dv.getFloat64(104, true);
+      serverData.localTime = dv.getFloat64(112, true);
+      serverData.flightNumber = dv.getInt16(120, true);
+      serverData.runwayHeading = dv.getInt16(122, true);
+      serverData.runwayElevation = dv.getInt16(124, true);
+      serverData.windDirection = dv.getInt16(126, true);
+      serverData.windDirectionMean = dv.getInt16(128, true);
+      serverData.barometerHeight = dv.getInt8(130, true);
+      serverData.maws_hour = dv.getInt8(131, true);
+      serverData.maws_minute = dv.getInt8(132, true);
+      serverData.maws_second = dv.getInt8(133, true);
+      serverData.humidity = dv.getInt8(134, true);
+      serverData.topNumber = dv.getInt8(135, true);
+      serverData.gpsStatus = dv.getInt8(136, true);
+      serverData.gpsMode = dv.getInt8(137, true);
+      serverData.gpsSatellitesVisible = dv.getInt8(138, true);
+      serverData.gpsSatellitesUsed = dv.getInt8(139, true);
+      serverData.recordStatus = dv.getInt8(140, true);
+      serverData.fromToStatus = dv.getInt8(141, true);
 
       self.postMessage({ cmd: 'data', data: serverData });
     }
@@ -192,6 +190,24 @@ self.onmessage = (e) => {
         const buf = new ArrayBuffer(1);
         const dv = new DataView(buf);
         dv.setUint8(0, ServerCmd.FromTo);
+        socket8080.send(buf);
+      }
+      break;
+    case 'elevation':
+      if (socket8080 !== null && socket8080.readyState === 1) {
+        const buf = new ArrayBuffer(3);
+        const dv = new DataView(buf);
+        dv.setUint8(0, ServerCmd.Elevation);
+        dv.setUint16(1, msg.data.elevation, true);
+        socket8080.send(buf);
+      }
+      break;
+    case 'heading':
+      if (socket8080 !== null && socket8080.readyState === 1) {
+        const buf = new ArrayBuffer(3);
+        const dv = new DataView(buf);
+        dv.setUint8(0, ServerCmd.Heading);
+        dv.setUint16(1, msg.data.heading, true);
         socket8080.send(buf);
       }
       break;

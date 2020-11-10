@@ -1,9 +1,14 @@
 let flightNumber = -1;
 let topNumber = -1;
 let recordStatus = -1;
+let runwayHeading = 0;
+let runwayElevation = 0;
 
 // Create worker thread for server communication.
 const serverCommunicationWorker = new Worker('./scripts/communication.worker.js');
+// Init charts
+const windspeedChart = new WindspeedChart('#windspeedChart', 0);
+const humidityChart = new HumidityChart('#humidityChart', 0, 0);
 
 const gpsStatus = [
   'No Fix', // No Fix
@@ -27,19 +32,8 @@ const gpsMode = [
 
 // Update local time indication periodically
 function UpdateGui(serverData) {
-  // Server local time and date
-  let d = new Date(
-    1900 + serverData.year,
-    serverData.month,
-    serverData.day,
-    serverData.hour,
-    serverData.minute,
-    serverData.second,
-    0
-  );
-
-  const tm_local = d.toLocaleTimeString();
-  d = new Date(0);
+  // GPS time and date
+  let d = new Date(0);
   d.setUTCSeconds(serverData.gpsTime);
 
   const tm_gps =
@@ -49,10 +43,20 @@ function UpdateGui(serverData) {
     ':' +
     d.getUTCSeconds().toString(10).padStart(2, '0');
 
+  // Get MAWS time
+  d = new Date(
+    d.getUTCFullYear(),
+    d.getUTCMonth(),
+    d.getUTCDay(),
+    serverData.maws_hour,
+    serverData.maws_minute,
+    serverData.maws_second,
+    0
+  );
+  const tm_local = d.toLocaleTimeString();
+
   document.getElementById('localDate').innerHTML = d.toLocaleDateString();
   document.getElementById('localTime').innerHTML = `${tm_local} / ${tm_gps}`;
-
-  document.getElementById('timeDifference').innerHTML = `${serverData.timeDiff.toPrecision(4)} sec`;
 
   // Flight and top number
   const fn = document.getElementById('flightNumberInput');
@@ -90,6 +94,17 @@ function UpdateGui(serverData) {
     document.getElementById('recordSpinner').classList.remove('d-none');
   }
 
+  // Runway heading and elevation
+  if (runwayElevation !== serverData.runwayElevation) {
+    runwayElevation = serverData.runwayElevation;
+    document.getElementById('elevationInput').value = runwayElevation.toFixed(0);
+  }
+
+  if (runwayHeading !== serverData.runwayHeading) {
+    runwayHeading = serverData.runwayHeading;
+    document.getElementById('runwayHeadingInput').value = runwayHeading.toFixed(0);
+  }
+
   // GPS Information
   document.getElementById('gpsLat').innerHTML = `${serverData.gpsLat.toFixed(6)}°`;
   document.getElementById('gpsLon').innerHTML = `${serverData.gpsLon.toFixed(6)}°`;
@@ -120,6 +135,9 @@ function UpdateGui(serverData) {
   document.getElementById('windspeed').innerHTML = `${serverData.windspeed.toFixed(1)}`;
   document.getElementById('crossWindspeed').innerHTML = `${serverData.crossWindspeed.toFixed(1)}`;
   document.getElementById('headWindspeed').innerHTML = `${serverData.headWindspeed.toFixed(1)}`;
+  // Update charts
+  windspeedChart.Update(serverData.windspeedMean);
+  humidityChart.Update(serverData.temperature, serverData.humidity);
 }
 
 // Start/stop recording
@@ -148,6 +166,28 @@ function OnFromToButtonClick(ev) {
   });
 }
 
+// Forward elevation changes to server
+function OnElevationInputChange(ev) {
+  const elevation = Number.parseInt(ev.target.value, 10);
+  serverCommunicationWorker.postMessage({
+    cmd: 'elevation',
+    data: {
+      elevation
+    }
+  });
+}
+
+// Forward runway heading changes to server
+function OnRunwayHeadingInputChange(ev) {
+  const heading = Number.parseInt(ev.target.value, 10);
+  serverCommunicationWorker.postMessage({
+    cmd: 'heading',
+    data: {
+      heading
+    }
+  });
+}
+
 // Show new noty of specific type
 function showNoty(text, type) {
   new Noty({
@@ -163,10 +203,6 @@ function showNoty(text, type) {
 
 // Start application as soon as DOM is fully loaded
 document.addEventListener('DOMContentLoaded', () => {
-  // Init charts
-  const windspeedChart = new WindspeedChart('#windspeedChart', 0);
-  const humidityChart = new HumidityChart('#humidityChart', 0, 0);
-
   serverCommunicationWorker.onmessage = (e) => {
     const msg = e.data;
     switch (msg.cmd) {
@@ -187,9 +223,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
 
-  // Add button click events
+  // Add event handlers
   document.getElementById('recordButton').addEventListener('click', OnRecordButtonClick);
   document.getElementById('fromToButton').addEventListener('click', OnFromToButtonClick);
+  document.getElementById('elevationInput').addEventListener('change', OnElevationInputChange);
+  document.getElementById('runwayHeadingInput').addEventListener('change', OnRunwayHeadingInputChange);
 
   // Finally, connect to weather station
   serverCommunicationWorker.postMessage({
