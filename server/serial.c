@@ -8,10 +8,11 @@
 #include <poll.h>
 #include "serial.h"
 
-char serial_name[255] = "";
-const char *serial_interface = "/dev/ttyUSB0";
-int baudrate = B9600;
-int serialfd = -1;
+static char serial_name[255] = "";
+static const char *serial_interface = "/dev/ttyUSB0";
+static int baudrate = B9600;
+static int serial_fd = -1;
+static char serial_buffer[1024];
 
 void set_baudrate(const char *arg)
 {
@@ -69,15 +70,15 @@ int open_serial(void)
 {
     struct termios tios;
 
-    serialfd = open(serial_interface, O_RDWR | O_NOCTTY);
-    if (serialfd < 0)
+    serial_fd = open(serial_interface, O_RDWR | O_NOCTTY);
+    if (serial_fd < 0)
     {
         fprintf(stderr, "Failed to open serial device %s: %s\n",
                 serial_interface, strerror(errno));
         return (EXIT_FAILURE);
     }
 
-    if (tcgetattr(serialfd, &tios) < 0)
+    if (tcgetattr(serial_fd, &tios) < 0)
     {
         fprintf(stderr, "tcgetattr(%s): %s\n", serial_interface, strerror(errno));
         return (EXIT_FAILURE);
@@ -105,9 +106,9 @@ int open_serial(void)
         return (EXIT_FAILURE);
     }
 
-    tcflush(serialfd, TCIFLUSH);
+    tcflush(serial_fd, TCIFLUSH);
 
-    if (tcsetattr(serialfd, TCSANOW, &tios) < 0)
+    if (tcsetattr(serial_fd, TCSANOW, &tios) < 0)
     {
         fprintf(stderr, "Serial tcsetattr(%s): %s\n",
                 serial_interface, strerror(errno));
@@ -123,5 +124,11 @@ int open_serial(void)
 
 void close_serial(void)
 {
-    close(serialfd);
+    close(serial_fd);
+}
+
+char *read_serial(ssize_t *len)
+{
+    *len = read(serial_fd, serial_buffer, sizeof(serial_buffer) - 1);
+    return serial_buffer;
 }
