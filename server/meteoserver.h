@@ -4,6 +4,8 @@
 #define SERVER_CMD_START 0x1a
 #define SERVER_CMD_STOP 0x2b
 #define SERVER_CMD_FROMTO 0x3c
+#define SERVER_CMD_ELEVATION 0x4d
+#define SERVER_CMD_HEADING 0x5e
 
 typedef struct __attribute__((__packed__))
 {
@@ -12,8 +14,6 @@ typedef struct __attribute__((__packed__))
     double gps_lat;
     double gps_lon;
     double gps_alt_msl;
-    double barometer_height;
-    double runway_elevation;
     double temperature;
     double baro_pressure;
     double windspeed;
@@ -22,18 +22,17 @@ typedef struct __attribute__((__packed__))
     double head_windspeed;
     double baro_qfe;
     double baro_qnh;
-    double tm_diff;
     double gps_time;
+    double local_time;
     unsigned short flight_number;
     unsigned short runway_heading;
+    unsigned short runway_elevation;
     unsigned short wind_direction;
     unsigned short wind_direction_mean;
-    unsigned short tm_year; /* Year	- 1900.  */
-    unsigned char tm_mon;   /* Month.	[0-11] */
-    unsigned char tm_mday;  /* Day.		[1-31] */
-    unsigned char tm_hour;  /* Hours.	[0-23] */
-    unsigned char tm_min;   /* Minutes.	[0-59] */
-    unsigned char tm_sec;   /* Seconds.	[0-60] (1 leap second) */
+    unsigned char barometer_height;
+    unsigned char maws_hour;
+    unsigned char maws_min;
+    unsigned char maws_sec;
     unsigned char humidity;
     unsigned char top_number;
     unsigned char gps_status;
@@ -50,5 +49,11 @@ typedef struct __attribute__((__packed__))
     unsigned short flight_number;
     unsigned char top_number;
 } t_start_cmd;
+
+typedef struct __attribute__((__packed__))
+{
+    unsigned char id;
+    unsigned short val;
+} t_ushort_cmd;
 
 #endif /* METEOSERVER_H */
