@@ -2,8 +2,8 @@ CC = gcc
 CPPFLAGS += -D_GNU_SOURCE
 
 DIALECT = -std=c18
-CFLAGS += $(DIALECT) -o2 -g -W -D_DEFAULT_SOURCE
-LIBS = -lpthread -lwebsockets -lgps
+CFLAGS += $(DIALECT) -od -g -W -D_DEFAULT_SOURCE -Wall -fno-common -Wmissing-declarations
+LIBS = -lpthread -lwebsockets -lgps -lm
 LDFLAGS =
 
 all: meteoserver
