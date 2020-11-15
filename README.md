@@ -1,6 +1,6 @@
 # Meteo
 
-Websocket server and web client to visualize data from a Vaisalla weather station during EASA compliant acoustic tests.
+Websocket server and web client to visualize data from a Vaisalla weather station during EASA acoustic compliance tests.
 
 ## Debian/Raspbian packages
 
