@@ -89,7 +89,7 @@ function connect8080() {
       console.error(`Wrong type of received message: ${e.data}`);
     } else {
       const arr = new Uint8Array(e.data);
-      let dv = new DataView(arr.buffer, 0, arr.length);
+      const dv = new DataView(arr.buffer, 0, arr.length);
       serverData.gpsHDOP = dv.getFloat64(0, true);
       serverData.gpsPDOP = dv.getFloat64(8, true);
       serverData.gpsLat = dv.getFloat64(16, true);

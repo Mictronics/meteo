@@ -36,12 +36,10 @@ function UpdateGui(serverData) {
   let d = new Date(0);
   d.setUTCSeconds(serverData.gpsTime);
 
-  const tm_gps =
-    d.getUTCHours().toString(10).padStart(2, '0') +
-    ':' +
-    d.getUTCMinutes().toString(10).padStart(2, '0') +
-    ':' +
-    d.getUTCSeconds().toString(10).padStart(2, '0');
+  const timeGPS = `${d.getUTCHours().toString(10).padStart(2, '0')}:${d
+    .getUTCMinutes()
+    .toString(10)
+    .padStart(2, '0')}:${d.getUTCSeconds().toString(10).padStart(2, '0')}`;
 
   // Get MAWS time
   d = new Date(
@@ -53,10 +51,10 @@ function UpdateGui(serverData) {
     serverData.maws_second,
     0
   );
-  const tm_local = d.toLocaleTimeString();
+  const timeLocal = d.toLocaleTimeString();
 
   document.getElementById('localDate').innerHTML = d.toLocaleDateString();
-  document.getElementById('localTime').innerHTML = `${tm_local} / ${tm_gps}`;
+  document.getElementById('localTime').innerHTML = `${timeLocal} / ${timeGPS}`;
 
   // Flight and top number
   const fn = document.getElementById('flightNumberInput');
