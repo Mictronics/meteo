@@ -105,6 +105,10 @@ static FILE *record_fp;
 static double temperature_arr[MOVING_AVG_LENGTH];
 static unsigned char humidity_arr[MOVING_AVG_LENGTH];
 static double windspeed_arr[MOVING_AVG_LENGTH];
+static double cross_wind_arr[MOVING_AVG_LENGTH];
+static double head_wind_arr[MOVING_AVG_LENGTH];
+static double wind_comp1_arr[MOVING_AVG_LENGTH];
+static double wind_comp2_arr[MOVING_AVG_LENGTH];
 static unsigned short wind_direction_arr[MOVING_AVG_LENGTH];
 static unsigned char moving_avg_index = 0;
 
@@ -504,8 +508,6 @@ static void *serial_read_thread(void *arg)
     double pressure;
     double windspeed;
     double windspeed_mean;
-    double cross_windspeed;
-    double head_windspeed;
     double qfe;
     double qnh;
     unsigned short wind_direction;
@@ -515,6 +517,13 @@ static void *serial_read_thread(void *arg)
     unsigned char sec;
     unsigned char humidity;
     double humidity_mean;
+    signed short difference;
+    double cross_wind;
+    double head_wind;
+    double cross_wind_mean;
+    double head_wind_mean;
+    double wind_comp1;
+    double wind_comp2;
 
     while (!serial_thread_exit)
     {
@@ -524,6 +533,12 @@ static void *serial_read_thread(void *arg)
             items = sscanf(buf, "%lf\t%hhu\t%lf\t%lf\t%hu\t%hhu\t%hhu\t%hhu", &temperature, &humidity, &pressure, &windspeed, &wind_direction, &hour, &min, &sec);
             if (items == 8)
             {
+                difference = wind_direction - runway_heading;
+                cross_wind = windspeed * sin(difference * DEG_2_RAD);
+                head_wind = windspeed * cos(difference * DEG_2_RAD);
+                wind_comp1 = windspeed * sin(wind_direction * DEG_2_RAD);
+                wind_comp2 = windspeed * cos(wind_direction * DEG_2_RAD);
+
                 // Fill arrays before we calculate average
                 if (moving_avg_index < MOVING_AVG_LENGTH)
                 {
@@ -531,6 +546,10 @@ static void *serial_read_thread(void *arg)
                     humidity_arr[moving_avg_index] = humidity;
                     windspeed_arr[moving_avg_index] = windspeed;
                     wind_direction_arr[moving_avg_index] = wind_direction;
+                    cross_wind_arr[moving_avg_index] = cross_wind;
+                    head_wind_arr[moving_avg_index] = head_wind;
+                    wind_comp1_arr[moving_avg_index] = wind_comp1;
+                    wind_comp2_arr[moving_avg_index] = wind_comp2;
                     moving_avg_index += 1;
                 }
                 else
@@ -540,40 +559,62 @@ static void *serial_read_thread(void *arg)
                     memmove(&humidity_arr[0], &humidity_arr[1], (MOVING_AVG_LENGTH - 1) * sizeof(unsigned char));
                     memmove(&windspeed_arr[0], &windspeed_arr[1], (MOVING_AVG_LENGTH - 1) * sizeof(double));
                     memmove(&wind_direction_arr[0], &wind_direction_arr[1], (MOVING_AVG_LENGTH - 1) * sizeof(unsigned short));
+                    memmove(&cross_wind_arr[0], &cross_wind_arr[1], (MOVING_AVG_LENGTH - 1) * sizeof(double));
+                    memmove(&head_wind_arr[0], &head_wind_arr[1], (MOVING_AVG_LENGTH - 1) * sizeof(double));
+                    memmove(&wind_comp1_arr[0], &wind_comp1_arr[1], (MOVING_AVG_LENGTH - 1) * sizeof(double));
+                    memmove(&wind_comp2_arr[0], &wind_comp2_arr[1], (MOVING_AVG_LENGTH - 1) * sizeof(double));
                     // Add new value at the end
                     temperature_arr[MOVING_AVG_LENGTH - 1] = temperature;
                     humidity_arr[MOVING_AVG_LENGTH - 1] = humidity;
                     windspeed_arr[MOVING_AVG_LENGTH - 1] = windspeed;
                     wind_direction_arr[MOVING_AVG_LENGTH - 1] = wind_direction;
+                    cross_wind_arr[MOVING_AVG_LENGTH - 1] = cross_wind;
+                    head_wind_arr[MOVING_AVG_LENGTH - 1] = head_wind;
+                    wind_comp1_arr[MOVING_AVG_LENGTH - 1] = wind_comp1;
+                    wind_comp2_arr[MOVING_AVG_LENGTH - 1] = wind_comp2;
                     // Calculate average
                     for (int i = 0; i < MOVING_AVG_LENGTH; i++)
                     {
                         temperature_mean += temperature_arr[i];
                         humidity_mean += humidity_arr[i];
                         windspeed_mean += windspeed_arr[i];
-                        wind_direction_mean += wind_direction_arr[i];
+                        cross_wind_mean += cross_wind_arr[i];
+                        head_wind_mean += head_wind_arr[i];
+                        wind_comp1 += wind_comp1_arr[i];
+                        wind_comp2 += wind_comp2_arr[i];
                     }
 
                     temperature_mean /= (double)MOVING_AVG_LENGTH;
                     humidity_mean /= (double)MOVING_AVG_LENGTH;
                     windspeed_mean /= (double)MOVING_AVG_LENGTH;
-                    wind_direction_mean /= (double)MOVING_AVG_LENGTH;
+                    cross_wind_mean /= (double)MOVING_AVG_LENGTH;
+                    head_wind_mean /= (double)MOVING_AVG_LENGTH;
+                    wind_comp1 /= (double)MOVING_AVG_LENGTH;
+                    wind_comp2 /= (double)MOVING_AVG_LENGTH;
+
+                    wind_direction_mean = atan2(wind_comp1, wind_comp2) * RAD_2_DEG;
+                    if (wind_direction_mean < 0.0)
+                    {
+                        wind_direction_mean = 360.0 + wind_direction_mean;
+                    }
                 }
 
                 double elev = runway_elevation * 0.3048;
-                qfe = pressure * (1.0 + (height_qfe * EARTH_G) / (R * temperature));
+                qfe = pressure * (1.0 + ((height_qfe * EARTH_G) / (R * (temperature + 273.15))));
                 qnh = qfe * exp((elev * EARTH_G) / (R * (TREF + (ALPHA * elev) / 2.0)));
 
-                // Block mutex only minimum of time
+                // Block mutex only minimum time
                 pthread_mutex_trylock(&lock_packetdata_update);
                 packet_data.baro_qfe = qfe;
                 packet_data.baro_qnh = qnh;
                 packet_data.temperature = temperature_mean;
                 packet_data.humidity = humidity_mean;
                 packet_data.wind_direction = wind_direction;
-                packet_data.wind_direction_mean = wind_direction_mean;
+                packet_data.wind_direction_mean = (unsigned short)wind_direction_mean;
                 packet_data.windspeed = windspeed;
                 packet_data.windspeed_mean = windspeed_mean;
+                packet_data.cross_windspeed = (double)cross_wind_mean;
+                packet_data.head_windspeed = (double)head_wind_mean;
                 packet_data.baro_pressure = pressure;
                 packet_data.maws_hour = hour;
                 packet_data.maws_min = min;
@@ -633,8 +674,6 @@ static void test_handler(size_t timer_id, void *user_data)
     double pressure;
     double windspeed;
     double windspeed_mean;
-    double cross_windspeed;
-    double head_windspeed;
     double qfe;
     double qnh;
     unsigned short wind_direction;
@@ -644,6 +683,13 @@ static void test_handler(size_t timer_id, void *user_data)
     unsigned char sec;
     unsigned char humidity;
     double humidity_mean;
+    signed short difference;
+    double cross_wind;
+    double head_wind;
+    double cross_wind_mean;
+    double head_wind_mean;
+    double wind_comp1;
+    double wind_comp2;
 
     if (fgets(test_buf, 1024, test_fp) == NULL)
     {
@@ -657,6 +703,12 @@ static void test_handler(size_t timer_id, void *user_data)
         items = sscanf(buf, "%lf\t%hhu\t%lf\t%lf\t%hu\t%hhu\t%hhu\t%hhu", &temperature, &humidity, &pressure, &windspeed, &wind_direction, &hour, &min, &sec);
         if (items == 8)
         {
+            difference = wind_direction - runway_heading;
+            cross_wind = windspeed * sin(difference * DEG_2_RAD);
+            head_wind = windspeed * cos(difference * DEG_2_RAD);
+            wind_comp1 = windspeed * sin(wind_direction * DEG_2_RAD);
+            wind_comp2 = windspeed * cos(wind_direction * DEG_2_RAD);
+
             // Fill arrays before we calculate average
             if (moving_avg_index < MOVING_AVG_LENGTH)
             {
@@ -664,6 +716,10 @@ static void test_handler(size_t timer_id, void *user_data)
                 humidity_arr[moving_avg_index] = humidity;
                 windspeed_arr[moving_avg_index] = windspeed;
                 wind_direction_arr[moving_avg_index] = wind_direction;
+                cross_wind_arr[moving_avg_index] = cross_wind;
+                head_wind_arr[moving_avg_index] = head_wind;
+                wind_comp1_arr[moving_avg_index] = wind_comp1;
+                wind_comp2_arr[moving_avg_index] = wind_comp2;
                 moving_avg_index += 1;
             }
             else
@@ -673,24 +729,44 @@ static void test_handler(size_t timer_id, void *user_data)
                 memmove(&humidity_arr[0], &humidity_arr[1], (MOVING_AVG_LENGTH - 1) * sizeof(unsigned char));
                 memmove(&windspeed_arr[0], &windspeed_arr[1], (MOVING_AVG_LENGTH - 1) * sizeof(double));
                 memmove(&wind_direction_arr[0], &wind_direction_arr[1], (MOVING_AVG_LENGTH - 1) * sizeof(unsigned short));
+                memmove(&cross_wind_arr[0], &cross_wind_arr[1], (MOVING_AVG_LENGTH - 1) * sizeof(double));
+                memmove(&head_wind_arr[0], &head_wind_arr[1], (MOVING_AVG_LENGTH - 1) * sizeof(double));
+                memmove(&wind_comp1_arr[0], &wind_comp1_arr[1], (MOVING_AVG_LENGTH - 1) * sizeof(double));
+                memmove(&wind_comp2_arr[0], &wind_comp2_arr[1], (MOVING_AVG_LENGTH - 1) * sizeof(double));
                 // Add new value at the end
                 temperature_arr[MOVING_AVG_LENGTH - 1] = temperature;
                 humidity_arr[MOVING_AVG_LENGTH - 1] = humidity;
                 windspeed_arr[MOVING_AVG_LENGTH - 1] = windspeed;
                 wind_direction_arr[MOVING_AVG_LENGTH - 1] = wind_direction;
+                cross_wind_arr[MOVING_AVG_LENGTH - 1] = cross_wind;
+                head_wind_arr[MOVING_AVG_LENGTH - 1] = head_wind;
+                wind_comp1_arr[MOVING_AVG_LENGTH - 1] = wind_comp1;
+                wind_comp2_arr[MOVING_AVG_LENGTH - 1] = wind_comp2;
                 // Calculate average
                 for (int i = 0; i < MOVING_AVG_LENGTH; i++)
                 {
                     temperature_mean += temperature_arr[i];
                     humidity_mean += humidity_arr[i];
                     windspeed_mean += windspeed_arr[i];
-                    wind_direction_mean += wind_direction_arr[i];
+                    cross_wind_mean += cross_wind_arr[i];
+                    head_wind_mean += head_wind_arr[i];
+                    wind_comp1 += wind_comp1_arr[i];
+                    wind_comp2 += wind_comp2_arr[i];
                 }
 
                 temperature_mean /= (double)MOVING_AVG_LENGTH;
                 humidity_mean /= (double)MOVING_AVG_LENGTH;
                 windspeed_mean /= (double)MOVING_AVG_LENGTH;
-                wind_direction_mean /= (double)MOVING_AVG_LENGTH;
+                cross_wind_mean /= (double)MOVING_AVG_LENGTH;
+                head_wind_mean /= (double)MOVING_AVG_LENGTH;
+                wind_comp1 /= (double)MOVING_AVG_LENGTH;
+                wind_comp2 /= (double)MOVING_AVG_LENGTH;
+
+                wind_direction_mean = atan2(wind_comp1, wind_comp2) * RAD_2_DEG;
+                if (wind_direction_mean < 0.0)
+                {
+                    wind_direction_mean = 360.0 + wind_direction_mean;
+                }
             }
 
             double elev = runway_elevation * 0.3048;
@@ -704,9 +780,11 @@ static void test_handler(size_t timer_id, void *user_data)
             packet_data.temperature = temperature_mean;
             packet_data.humidity = humidity_mean;
             packet_data.wind_direction = wind_direction;
-            packet_data.wind_direction_mean = wind_direction_mean;
+            packet_data.wind_direction_mean = (unsigned short)wind_direction_mean;
             packet_data.windspeed = windspeed;
             packet_data.windspeed_mean = windspeed_mean;
+            packet_data.cross_windspeed = (double)cross_wind_mean;
+            packet_data.head_windspeed = (double)head_wind_mean;
             packet_data.baro_pressure = pressure;
             packet_data.maws_hour = hour;
             packet_data.maws_min = min;
