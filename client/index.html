@@ -27,39 +27,39 @@
       >
         <div class="row">
           <div class="col-5 text-black-50">Temperature [°C]</div>
-          <div id="temperature" class="col-3">---</div>
+          <div id="temperature" class="col-3 h5">---</div>
         </div>
         <div class="row">
           <div class="col-5 text-black-50">Humitity [%]</div>
-          <div id="humidity" class="col-3">---</div>
+          <div id="humidity" class="col-3 h5">---</div>
         </div>
         <div class="row">
           <div class="col-5 text-black-50">Pressure [hPa]</div>
-          <div id="pressure" class="col-3">---</div>
+          <div id="pressure" class="col-3 h5">---</div>
         </div>
         <div class="row">
           <div class="col-5 text-black-50">QFE [hPa]</div>
-          <div id="qfe" class="col-3">---</div>
+          <div id="qfe" class="col-3 h5">---</div>
         </div>
         <div class="row">
           <div class="col-5 text-black-50">QNH [hPa]</div>
-          <div id="qnh" class="col-3">---</div>
+          <div id="qnh" class="col-3 h5">---</div>
         </div>
         <div class="row">
           <div class="col-5 text-black-50">Wind Direction [kts]</div>
-          <div id="windDirection" class="col-3">---</div>
+          <div id="windDirection" class="col-3 h5">---</div>
         </div>
         <div class="row">
           <div class="col-5 text-black-50">Wind Speed [kts]</div>
-          <div id="windspeed" class="col-3">---</div>
+          <div id="windspeed" class="col-3 h5">---</div>
         </div>
         <div class="row">
-          <div class="col-5 text-black-50">Cross Wind [kts]</div>
-          <div id="crossWindspeed" class="col-3">---</div>
+          <div id="crossWindspeedLabel" class="col-5 text-black-50">Cross Wind [kts]</div>
+          <div id="crossWindspeed" class="col-3 h5">---</div>
         </div>
         <div class="row">
-          <div class="col-5 text-black-50">Head Wind [kts]</div>
-          <div id="headWindspeed" class="col-3">---</div>
+          <div id="headWindspeedLabel" class="col-5 text-black-50">Head Wind [kts]</div>
+          <div id="headWindspeed" class="col-3 h5">---</div>
         </div>
         <div class="row">
           <div class="col-5 text-black-50">Elevation [ft]</div>
@@ -89,7 +89,7 @@
       <div
         class="d-flex flex-column flex-grow-1 justify-content-start p-1 element-border"
       >
-        <object type="image/svg+xml" data="./images/hsi.svg"></object>
+        <object id="hsiObject" type="image/svg+xml" data="./images/hsi.svg"></object>
         <div class="d-flex flex-row justify-content-around">
           <div class="text-black-50">Wind Direction [mean]</div>
           <button id="fromToButton" type="button" class="btn btn-secondary">
@@ -98,9 +98,9 @@
           <div class="text-black-50">Wind Speed [mean]</div>
         </div>
         <div class="d-flex flex-row justify-content-around">
-          <div id="windDirectionMean" class="">---</div>
+          <div id="windDirectionMean" class="h4">---</div>
           <span></span>
-          <div id="windspeedMean" class="">---</div>
+          <div id="windspeedMean" class="h4">---</div>
         </div>
       </div>
       <div class="d-flex flex-column flex-grow-1 p-1 element-border">
