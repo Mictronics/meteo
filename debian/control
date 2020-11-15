@@ -1,4 +1,4 @@
-Source: meteoserver
+Source: meteo
 Section: net
 Priority: optional
 Maintainer: Michael Wolf <michael@mictronics.de>
@@ -7,7 +7,7 @@ Standards-Version: 1.0.0
 Homepage: https://github.com/mictronics/meteo
 Vcs-Git: https://github.com/Mictronics/meteo.git
 
-Package: meteoserver
+Package: meteo
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, libgps-dev, libpthread-stubs0-dev, libwebsockets-dev
 Description: Websocket server for Vaisalla weather station

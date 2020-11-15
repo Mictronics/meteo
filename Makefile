@@ -8,11 +8,11 @@ LDFLAGS =
 
 all: meteoserver
 
-%.o: %.c *.h
+%.o: server/%.c server/*.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
-meteoserver: meteoserver.o serial.o timer.o $(SDR_OBJ) $(COMPAT)
-	$(CC) -g -o $@ $^ $(LDFLAGS) $(LIBS)
+meteoserver: server/meteoserver.o server/serial.o server/timer.o
+	$(CC) -g -o server/$@ $^ $(LDFLAGS) $(LIBS)
 
 clean:
-	rm -f *.o meteoserver
+	rm -f server/*.o server/meteoserver

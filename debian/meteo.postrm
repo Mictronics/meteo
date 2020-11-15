@@ -22,6 +22,8 @@ set -e
 case "$1" in
     purge)
 	rm -f /etc/default/meteoserver
+    rm -rf /user/share/webmeteo
+    rm -rf /var/meteodata
         ;;
 
     remove)

@@ -1,5 +1,5 @@
 Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-Upstream-Name: turtleserver
+Upstream-Name: meteo
 Upstream-Contact: Michael Wolf <michael@mictronics.de>
 Source: https://github.com/mictronics/meteo
 

@@ -34,6 +34,7 @@ case "$1" in
         adduser "$RUNAS" dialout
         # Create folder to record meteo data
         mkdir -p /var/meteodata
+        chmod 755 /var/meteodata
     ;;
 
     abort-upgrade|abort-remove|abort-deconfigure)

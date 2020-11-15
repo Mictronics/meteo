@@ -1,13 +1,13 @@
 .TH meteoserver Mictronics 1 "05 November 2020" "" ""
 .RS
 .SH NAME
-turtleserver
+meteoserver
 .SH VERSION
 1.0.0
 .SH DESCRIPTION
-\fBWebsocket server for Turtle-Rover
+\fBWebsocket server for Vaisalla weather station.
 .SH USAGE
-\fBturtleserver [OPTION\.\.\.]
+\fBmeteoserver [OPTION\.\.\.]
 .SH OPTIONS
 .TP
 .B
@@ -20,11 +20,11 @@ Listen port [default: 8080]
 .TP
 .B
 \fB--serial\fP=<serial device>
-Serial device [default: /dev/ttyAMA0]
+Serial device [default: /dev/ttyUSB0]
 .TP
 .B
 \fB--baudrate\fP=<baudrate>
-Serial baudrate [default: 115200]
+Serial baudrate [default: 9600]
 .TP
 .B
 \fB--group\fP=<id>
@@ -36,11 +36,15 @@ Websocket user id [default: -1]
 .TP
 .B
 \fB-D\fP, \fB--daemon\fP
-Run turtleserver as a daemon
+Run meteoserver as a daemon
 .TP
 .B
 \fB-d\fP, \fB--debug\fP=<level>
 Set debug level [default: 0]
+.TP
+.B
+\fB--nogps
+Disable GPS support
 .SS  HELP OPTIONS
 .TP
 .B

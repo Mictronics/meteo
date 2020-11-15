@@ -20,10 +20,7 @@ override_dh_auto_build:
 override_dh_install:
 	dh_install
 	install -d debian/meteoserver/usr/bin
-	cp -a turtleserver debian/meteoserver/usr/bin/meteoserver
-
-override_dh_shlibdeps:
-	dh_shlibdeps --dpkg-shlibdeps-params=--ignore-missing-info
+	cp -a server/meteoserver debian/meteoserver/usr/bin/meteoserver
 
 %:
 	dh $@ --with=systemd

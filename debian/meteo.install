@@ -1,0 +1,2 @@
+client/* usr/share/webmeteo
+debian/lighttpd/* etc/lighttpd/conf-available
