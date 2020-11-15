@@ -2,7 +2,7 @@
   "lang": "en",
   "dir": "ltr",
   "name": "webmeteo",
-  "description": "Webapplication for monitoring weather data during acoustic test.",
+  "description": "Webapplication for monitoring Vaisalla weather data during acoustic test.",
   "short_name": "webmeteo",
   "scope": "/",
   "start_url": "/index.html",
