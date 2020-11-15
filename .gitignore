@@ -2,3 +2,5 @@ node_modules
 .vscode
 *.o
 meteoserver
+package-lock.json
+.prettierrc
