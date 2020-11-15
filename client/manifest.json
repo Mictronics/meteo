@@ -10,5 +10,20 @@
   "orientation": "landscape",
   "background_color": "white",
   "theme_color": "white",
-  "icons": []
+"icons": [
+    {
+      "src": "favicon.ico",
+      "sizes": "48x48"
+    },
+        {
+      "src": "images/icon192.ico",
+      "sizes": "192x192",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "images/icon256.ico",
+      "sizes": "256x256",
+      "purpose": "any maskable"
+    }
+  ]
 }
