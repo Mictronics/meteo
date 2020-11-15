@@ -47,6 +47,7 @@ size_t test_timer = 0;
 
 #define NOTUSED(V) ((void)V)
 #define WSBUFFERSIZE 512 /* Byte */
+// See ICAO doc 7488
 #define EARTH_G 9.80665
 #define R 287.05287
 #define TREF 288.15
@@ -129,7 +130,7 @@ static double wind_comp2_arr[MOVING_AVG_LENGTH];
 static unsigned short wind_direction_arr[MOVING_AVG_LENGTH];
 static unsigned char moving_avg_index = 0;
 
-static unsigned short runway_elevation = 1204; //Elevation[ft](Manching)
+static unsigned short runway_elevation = 1204; // Elevation[ft](Manching)
 static unsigned char height_qfe = 1;           // Height difference between barometer and reference level[m]
 static unsigned short runway_heading = 248;    // Runway heading[deg](Manching)
 
@@ -309,8 +310,7 @@ static int callback_broadcast(struct lws *wsi, enum lws_callback_reasons reason,
         if (num_clients > 50)
         {
             lwsl_notice("50 clients already connected. New connection rejected...\n");
-            return -1; /* Accept only one client on this server */
-            // TODO Allow more than one client, implement master-slave handling
+            return -1;
         }
         break;
     case LWS_CALLBACK_PROTOCOL_INIT:
@@ -384,8 +384,7 @@ static int callback_broadcast(struct lws *wsi, enum lws_callback_reasons reason,
 		 * let every subscriber know we want to write something
 		 * on them as soon as they are ready
 		 */
-        lws_start_foreach_llp(struct per_session_data **,
-                              ppss, vhd->pss_list)
+        lws_start_foreach_llp(struct per_session_data **, ppss, vhd->pss_list)
         {
             if (!(*ppss)->publishing)
                 lws_callback_on_writable((*ppss)->wsi);
@@ -885,6 +884,15 @@ int main(int argc, char **argv)
     info.max_http_header_pool = 16;
     info.timeout_secs = 5;
 
+    /* Create libwebsocket context representing this server */
+    context = lws_create_context(&info);
+
+    if (context == NULL)
+    {
+        lwsl_err("libwebsocket init failed\n");
+        return EXIT_FAILURE;
+    }
+
     /* Start reading serial data from weather station */
     pthread_create(&serial_thread, NULL, serial_read_thread, NULL);
 
@@ -910,15 +918,6 @@ int main(int argc, char **argv)
         pthread_create(&gps_thread, NULL, gps_read_thread, NULL);
     }
 
-    /* Create libwebsocket context representing this server */
-    context = lws_create_context(&info);
-
-    if (context == NULL)
-    {
-        lwsl_err("libwebsocket init failed\n");
-        return EXIT_FAILURE;
-    }
-
     initialize_timer();
     packet_timer = start_timer(500, timer1_handler, TIMER_PERIODIC, NULL);
 
@@ -926,6 +925,13 @@ int main(int argc, char **argv)
     test_fp = fopen("/tmp/vaisalla_log.txt", "r");
     test_timer = start_timer(1000, test_handler, TIMER_PERIODIC, NULL);
 #endif
+
+    // Check if serial thread is running.
+    // Exit if not, e.g. serial interface not open.
+    if (serial_thread_exit)
+    {
+        sighandler(0);
+    }
 
     // Infinite loop, to end this server send SIGTERM. (CTRL+C) */
     for (;;)
