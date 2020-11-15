@@ -1,8 +1,8 @@
 let flightNumber = -1;
 let topNumber = -1;
 let recordStatus = -1;
-let runwayHeading = 0;
-let runwayElevation = 0;
+let runwayHeading = -1;
+let runwayElevation = -1;
 
 // Create worker thread for server communication.
 const serverCommunicationWorker = new Worker('./scripts/communication.worker.js');
@@ -100,9 +100,13 @@ function UpdateGui(serverData) {
     document.getElementById('elevationInput').value = runwayElevation.toFixed(0);
   }
 
+  const hsiObject = document.getElementById('hsiObject').contentDocument.children[0];
   if (runwayHeading !== serverData.runwayHeading) {
     runwayHeading = serverData.runwayHeading;
     document.getElementById('runwayHeadingInput').value = runwayHeading.toFixed(0);
+    hsiObject.getElementById(
+      'aircraftSymbol'
+    ).attributes.transform.value = `matrix(1,0,0,1,70,70) rotate(${serverData.runwayHeading},0,0) scale(1.5)`;
   }
 
   // GPS Information
@@ -133,8 +137,30 @@ function UpdateGui(serverData) {
   document.getElementById('windspeedMean').innerHTML = `${serverData.windspeedMean.toFixed(1)}`;
   document.getElementById('windDirection').innerHTML = `${serverData.windDirection.toFixed(0)}`;
   document.getElementById('windspeed').innerHTML = `${serverData.windspeed.toFixed(1)}`;
-  document.getElementById('crossWindspeed').innerHTML = `${serverData.crossWindspeed.toFixed(1)}`;
-  document.getElementById('headWindspeed').innerHTML = `${serverData.headWindspeed.toFixed(1)}`;
+
+  if (serverData.crossWindspeed < 0.0) {
+    document.getElementById('crossWindspeedLabel').innerHTML = 'Crosswind from left [kts]';
+    document.getElementById('crossWindspeed').innerHTML = `${Math.abs(serverData.crossWindspeed).toFixed(1)}`;
+  } else {
+    document.getElementById('crossWindspeedLabel').innerHTML = 'Crosswind from right [kts]';
+    document.getElementById('crossWindspeed').innerHTML = `${Math.abs(serverData.crossWindspeed).toFixed(1)}`;
+  }
+
+  if (serverData.headWindspeed < 0.0) {
+    document.getElementById('headWindspeedLabel').innerHTML = 'Tailwind [kts]';
+    document.getElementById('headWindspeed').innerHTML = `${Math.abs(serverData.headWindspeed).toFixed(1)}`;
+  } else {
+    document.getElementById('headWindspeedLabel').innerHTML = 'Headwind [kts]';
+    document.getElementById('headWindspeed').innerHTML = `${Math.abs(serverData.headWindspeed).toFixed(1)}`;
+  }
+
+  hsiObject.getElementById(
+    'windArrow'
+  ).attributes.transform.value = `matrix(1,0,0,1,70,70) rotate(${serverData.windDirection},0,0)`;
+  hsiObject.getElementById(
+    'meanWindArrow'
+  ).attributes.transform.value = `matrix(1,0,0,1,70,70) rotate(${serverData.windDirectionMean},0,0)`;
+
   // Update charts
   windspeedChart.Update(serverData.windspeedMean);
   humidityChart.Update(serverData.temperature, serverData.humidity);
