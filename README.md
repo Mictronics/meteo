@@ -1,4 +1,6 @@
-# WebMeteo
+# Meteo
+
+Websocket server and web client to visualize data from a Vaisalla weather station during EASA compliant acoustic tests.
 
 ## Debian/Raspbian packages
 
@@ -18,15 +20,15 @@ Nothing special, just build it `dpkg-buildpackage -b -uc`.
 
 ### Installation
 
-Install package `sudo dpkg -i meteoserver_1.0.0_armhf.deb`.
+Install package `sudo dpkg -i meteo_1.0.0_armhf.deb`.
 
 ### Removal
 
-Remove the package `sudo apt-get purge meteoserver`.
+Remove the package `sudo apt-get purge meteo`.
 
 ### Configuration
 
-To configure the service add commandline options to `/etc/default/meteoserver` as required.
+To configure the service add commandline options to `/etc/default/meteo` as required.
 
 ## Building manually
 
