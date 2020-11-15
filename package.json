@@ -1,5 +1,5 @@
 {
-  "name": "webmeteo",
+  "name": "meteo",
   "version": "1.0.0",
   "description": "Visualization for Vaisalla weather station.",
   "author": {
@@ -8,12 +8,10 @@
     "url": "https://www.mictronics.de"
   },
   "license": "GPL-v3.0-or-later",
-  "build": "tsc --build",
   "private": true,
   "engines": {
     "node": ">= 13.5.0",
-    "npm": ">= 6.14.0",
-    "tsc": ">= 4.0.0"
+    "npm": ">= 6.14.0"
   },
   "main": "./client/index.html",
   "dependencies": {
