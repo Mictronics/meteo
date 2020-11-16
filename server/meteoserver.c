@@ -458,13 +458,13 @@ static void sighandler(int sig)
     pthread_mutex_unlock(&lock_packetdata_update);
     gps_thread_exit = true;
     pthread_join(gps_thread, NULL); /* Wait on GPS read thread exit */
+
+    serial_thread_exit = true;
+    pthread_join(serial_thread, NULL); /* Wait on serial read thread exit */
     pthread_mutex_destroy(&lock_packetdata_update);
-    gps_close(&gpsdata);
 
     pthread_mutex_unlock(&lock_established_conns);
     pthread_mutex_destroy(&lock_established_conns);
-
-    close_serial();
     lws_cancel_service(context);
     lws_context_destroy(context);
 
@@ -521,6 +521,7 @@ static void *gps_read_thread(void *arg)
         pthread_mutex_unlock(&lock_packetdata_update);
     }
 
+    gps_close(&gpsdata);
     pthread_mutex_unlock(&lock_packetdata_update);
     pthread_exit(NULL);
 }
