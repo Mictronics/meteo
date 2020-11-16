@@ -195,6 +195,7 @@ static void start_recording(t_start_cmd *start_cmd)
     time_t now = time(NULL);
     struct tm *t = localtime(&now);
 
+    pthread_mutex_trylock(&lock_packetdata_update);
     if (start_cmd->flight_number > 0)
     {
         packet_data.flight_number = start_cmd->flight_number;
@@ -224,6 +225,7 @@ static void start_recording(t_start_cmd *start_cmd)
     {
         lwsl_err("Error creating log file: %s\n", strerror(errno));
     }
+    pthread_mutex_unlock(&lock_packetdata_update);
 }
 
 /**
@@ -231,12 +233,14 @@ static void start_recording(t_start_cmd *start_cmd)
  */
 static void stop_recording(void)
 {
+    pthread_mutex_trylock(&lock_packetdata_update);
     if (record_fp != NULL)
     {
         fclose(record_fp);
         packet_data.top_number += 1;
     }
     packet_data.record_status = 0;
+    pthread_mutex_unlock(&lock_packetdata_update);
 }
 
 /**
@@ -266,6 +270,7 @@ static void handle_client_request(void *in, size_t len)
         if (len < 1)
             break;
         runway_heading = (runway_heading + 180) % 360;
+        pthread_mutex_trylock(&lock_packetdata_update);
         if (packet_data.from_to_status == 0)
         {
             packet_data.from_to_status = 1;
@@ -274,6 +279,7 @@ static void handle_client_request(void *in, size_t len)
         {
             packet_data.from_to_status = 0;
         }
+        pthread_mutex_unlock(&lock_packetdata_update);
         break;
     case SERVER_CMD_ELEVATION:
         // Change runway elevation
