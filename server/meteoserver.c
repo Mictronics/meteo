@@ -477,6 +477,22 @@ static void *gps_read_thread(void *arg)
 {
     NOTUSED(arg);
     thread_to_core(2);
+    gpssource.server = (char *)"localhost";
+    gpssource.port = (char *)DEFAULT_GPSD_PORT;
+    gpssource.device = NULL;
+
+    if (gps_open(gpssource.server, gpssource.port, &gpsdata) != 0)
+    {
+        gps_available = false;
+        lwsl_err("No gpsd running or network error: %s\n", gps_errstr(errno));
+        pthread_exit(NULL);
+    }
+
+    unsigned int flags = WATCH_ENABLE;
+    if (gpssource.device != NULL)
+        flags |= WATCH_DEVICE;
+    gps_stream(&gpsdata, flags, gpssource.device);
+
     lwsl_notice("GPS read thread started.");
     while (!gps_thread_exit)
     {
@@ -900,20 +916,6 @@ int main(int argc, char **argv)
     memset(&gpsdata, 0, sizeof(gpsdata));
     if (gps_available)
     {
-        gpssource.server = (char *)"localhost";
-        gpssource.port = (char *)DEFAULT_GPSD_PORT;
-        gpssource.device = NULL;
-
-        if (gps_open(gpssource.server, gpssource.port, &gpsdata) != 0)
-        {
-            gps_available = false;
-            lwsl_err("No gpsd running or network error: %s\n", gps_errstr(errno));
-        }
-
-        unsigned int flags = WATCH_ENABLE;
-        if (gpssource.device != NULL)
-            flags |= WATCH_DEVICE;
-        gps_stream(&gpsdata, flags, gpssource.device);
         /* Start reading GPS data */
         pthread_create(&gps_thread, NULL, gps_read_thread, NULL);
     }
