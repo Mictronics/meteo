@@ -61,7 +61,11 @@ static const char *iface = NULL;
 static int syslog_options = LOG_PID | LOG_PERROR;
 static size_t packet_timer = 0;
 static t_packet_data packet_data;
+#if GPSD_API_MAJOR_VERSION < 9
+static struct timespec ts_now, ts_diff, ts_gps;
+#else
 static timespec_t ts_now, ts_diff, ts_gps;
+#endif
 
 #ifndef LWS_NO_DAEMONIZE
 static int daemonize = 0;
@@ -507,13 +511,21 @@ static void *gps_read_thread(void *arg)
         {
             if (gps_waiting(&gpsdata, 500000))
             {
+#if GPSD_API_MAJOR_VERSION < 9
+                if (gps_read(&gpsdata) == -1)
+#else
                 if (gps_read(&gpsdata, NULL, 0) == -1)
+#endif
                 {
                     lwsl_err("GPS read error.\n");
                 }
                 // Calculate difference between local and GPS time
                 // Done here to avoid any latency caused by LWS
+#if GPSD_API_MAJOR_VERSION < 9
+                ts_gps = (long int)gpsdata.fix.time;
+#else
                 ts_gps = gpsdata.fix.time;
+#endif
                 (void)clock_gettime(CLOCK_REALTIME, &ts_now);
                 TS_SUB(&ts_diff, &ts_now, &ts_gps);
             }
@@ -690,8 +702,13 @@ static void timer1_handler(size_t timer_id, void *user_data)
     packet_data.gps_pdop = gpsdata.dop.pdop;
     packet_data.gps_lat = gpsdata.fix.latitude;
     packet_data.gps_lon = gpsdata.fix.longitude;
+#if GPSD_API_MAJOR_VERSION < 9
+    packet_data.gps_alt_msl = gpsdata.fix.altitude * METERS_TO_FEET;
+    packet_data.gps_time = gpsdata.fix.time;
+#else
     packet_data.gps_alt_msl = gpsdata.fix.altMSL * METERS_TO_FEET;
     packet_data.gps_time = (double)gpsdata.fix.time.tv_sec;
+#endif
     packet_data.runway_elevation = runway_elevation;
     packet_data.runway_heading = runway_heading;
     pthread_mutex_unlock(&lock_packetdata_update);
