@@ -522,7 +522,7 @@ static void *gps_read_thread(void *arg)
                 // Calculate difference between local and GPS time
                 // Done here to avoid any latency caused by LWS
 #if GPSD_API_MAJOR_VERSION < 9
-                ts_gps = (long int)gpsdata.fix.time;
+                ts_gps.tv_sec = (long int)gpsdata.fix.time;
 #else
                 ts_gps = gpsdata.fix.time;
 #endif
