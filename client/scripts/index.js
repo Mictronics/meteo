@@ -24,7 +24,7 @@ let runwayElevation = -1;
 // Create worker thread for server communication.
 const serverCommunicationWorker = new Worker('./scripts/communication.worker.js');
 // Init charts
-const windspeedChart = new WindspeedChart('#windspeedChart', 0);
+const windspeedChart = new WindspeedChart('#windspeedChart', 0, 0);
 const humidityChart = new HumidityChart('#humidityChart', 0, 0);
 
 const gpsStatus = [
@@ -177,7 +177,7 @@ function UpdateGui(serverData) {
   ).attributes.transform.value = `matrix(1,0,0,1,70,70) rotate(${serverData.windDirectionMean},0,0)`;
 
   // Update charts
-  windspeedChart.Update(serverData.windspeedMean);
+  windspeedChart.Update(serverData.windspeedMean, serverData.crossWindspeed);
   humidityChart.Update(serverData.temperature, serverData.humidity);
 }
 

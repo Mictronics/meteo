@@ -16,14 +16,15 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 class WindspeedChart {
-  constructor(element, windspeed) {
+  constructor(element, windspeed, crosswind) {
     // DOM element id where chart is plotted in
     this.element = element;
     // Add first data pair
     this.windSpeedData = [
       {
         date: new Date(),
-        speed: windspeed
+        speed: windspeed,
+        cross: crosswind
       }
     ];
     // Accessor that creates min and max values from date in data
@@ -33,11 +34,13 @@ class WindspeedChart {
       .seriesSvgLine()
       .mainValue((d) => d.speed)
       .crossValue((d) => d.date)
-      .decorate((sel) =>
-        sel
-          .enter()
-          .attr('style', 'stroke: black !important; stroke-width: 2px;')
-      );
+      .decorate((sel) => sel.enter().attr('style', 'stroke: red !important; stroke-width: 2px;'));
+
+    this.crossWindSpeed = fc
+      .seriesSvgLine()
+      .mainValue((d) => d.cross)
+      .crossValue((d) => d.date)
+      .decorate((sel) => sel.enter().attr('style', 'stroke: blue !important; stroke-width: 2px;'));
     // Grid lines
     this.windSpeedGridLines = fc
       .annotationSvgGridline()
@@ -51,12 +54,7 @@ class WindspeedChart {
       .orient('horizontal')
       .value(5)
       .decorate((sel) =>
-        sel
-          .enter()
-          .attr(
-            'style',
-            'stroke: blue !important; stroke-width: 2px; stroke-dasharray: 5,5;'
-          )
+        sel.enter().attr('style', 'stroke: blue !important; stroke-width: 2px; stroke-dasharray: 5,5;')
       );
     // Total wind limit line
     this.totalWindLimit = fc
@@ -64,22 +62,12 @@ class WindspeedChart {
       .orient('horizontal')
       .value(10)
       .decorate((sel) =>
-        sel
-          .enter()
-          .attr(
-            'style',
-            'stroke: red !important; stroke-width: 2px; stroke-dasharray: 5,5;'
-          )
+        sel.enter().attr('style', 'stroke: red !important; stroke-width: 2px; stroke-dasharray: 5,5;')
       );
     // Combine all chart elements in multi series
     this.multiWindSpeedSeries = fc
       .seriesSvgMulti()
-      .series([
-        this.windSpeedGridLines,
-        this.windSpeed,
-        this.crossWindLimit,
-        this.totalWindLimit
-      ]);
+      .series([this.windSpeedGridLines, this.windSpeed, this.crossWindSpeed, this.crossWindLimit, this.totalWindLimit]);
     // Define windspeed chart
     this.windSpeedChart = fc
       .chartCartesian(d3.scaleTime(), d3.scaleLinear())
@@ -97,10 +85,11 @@ class WindspeedChart {
   }
 
   // Update windspeed chart with new value
-  Update(windspeed) {
+  Update(windspeed, crosswind) {
     this.windSpeedData.push({
       date: new Date(),
-      speed: windspeed
+      speed: windspeed,
+      cross: crosswind
     });
     // Keep only last 60s of windspeed data
     if (this.windSpeedData.length > 60) {
@@ -223,9 +212,7 @@ class HumidityChart {
       .xDecorate((sel) => sel.enter().classed('xHumidityGridLines', true))
       .yDecorate((sel) => sel.enter().classed('yHumidityGridLines', true));
     // Combine all chart elements in multi series
-    this.multiHumiditySeries = fc
-      .seriesSvgMulti()
-      .series([this.humidityGridLines, this.pointHumidity]);
+    this.multiHumiditySeries = fc.seriesSvgMulti().series([this.humidityGridLines, this.pointHumidity]);
     // Define humidity chart
     this.humidityChart = fc
       .chartCartesian(d3.scaleLinear(), d3.scaleLinear())
