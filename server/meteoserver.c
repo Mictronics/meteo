@@ -1,6 +1,6 @@
 // Part of WebMeteo, a Vaisalla weather data visualization.
 //
-// Copyright (c) 2020 Michael Wolf <michael@mictronics.de>
+// Copyright (c) 2021 Michael Wolf <michael@mictronics.de>
 //
 // This file is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -60,6 +60,7 @@ static char interface_name[255] = "";
 static const char *iface = NULL;
 static int syslog_options = LOG_PID | LOG_PERROR;
 static size_t packet_timer = 0;
+static size_t record_timer = 0;
 static t_packet_data packet_data;
 #if GPSD_API_MAJOR_VERSION < 9
 static struct timespec ts_now, ts_diff, ts_gps;
@@ -106,7 +107,7 @@ struct per_vhost_data
 static error_t parse_opt(int key, char *arg, struct argp_state *state);
 const char *argp_program_version = "meteoserver v1.0";
 const char args_doc[] = "";
-const char doc[] = "Websocket Server for Vaisalla weather station\nLicense GPL-3+\n(C) 2020 Michael Wolf\n"
+const char doc[] = "Websocket Server for Vaisalla weather station\nLicense GPL-3+\n(C) 2021 Michael Wolf\n"
                    "This server provides weather and GPS data to web application via websocket.";
 static struct argp argp = {options, parse_opt, args_doc, doc, NULL, NULL, NULL};
 
@@ -216,13 +217,21 @@ static void start_recording(t_start_cmd *start_cmd)
         mkdir(path, 0755);
     }
     // Create file by flight and top number
-    snprintf(path, FILENAME_MAX, "/var/meteodata/%02u%02u%04u/F%04u_REC%03u_MeteoData.csv", t->tm_mday, t->tm_mon + 1, 1900 + t->tm_year, packet_data.flight_number, packet_data.top_number);
+    snprintf(path, FILENAME_MAX, "/var/meteodata/%02u%02u%04u/F%04u_REC%03u_MeteoData_%02u%02u%02u.csv",
+             t->tm_mday,
+             t->tm_mon + 1,
+             1900 + t->tm_year,
+             packet_data.flight_number,
+             packet_data.top_number,
+             t->tm_hour,
+             t->tm_min,
+             t->tm_sec);
     record_fp = fopen(path, "a");
     if (record_fp != NULL)
     {
         // Add file header
-        fputs("TIME;TEMP;HUM;PRESSURE;DIRECTION;WIND_TOTAL;WIND_LAT;MEAN_WIND_TOTAL;MEAN_WIND_LAT;TIME;TIME_GPS_RECORDED;TIME_MAWS_RECORDED\n", record_fp);
-        fputs("seconds;degC;%;mbar;deg;kt;kt;kt;kt;HMS;HMS;HMS\n", record_fp);
+        fputs("LOG_TIME;TEMP;HUM;PRESSURE;DIRECTION;WIND_TOTAL;WIND_LAT;MEAN_WIND_TOTAL;MEAN_WIND_LAT;GPS_EPOCH_RECORDED;TIME_MAWS_RECORDED;TOP_NUMBER\n", record_fp);
+        fputs("HH:MM:SS;degC;%;mbar;deg;kt;kt;kt;kt;seconds;HH:MM:SS;#\n", record_fp);
         packet_data.record_status = 1;
     }
     else
@@ -451,7 +460,9 @@ static int thread_to_core(int core_id)
 static void sighandler(int sig)
 {
     NOTUSED(sig);
+    stop_recording();
     stop_timer(packet_timer);
+    stop_timer(record_timer);
 
 #ifdef TESTSERIAL
     stop_timer(test_timer);
@@ -664,7 +675,8 @@ static void *serial_read_thread(void *arg)
                 packet_data.wind_direction_mean = (unsigned short)wind_direction_mean;
                 packet_data.windspeed = windspeed;
                 packet_data.windspeed_mean = windspeed_mean;
-                packet_data.cross_windspeed = (double)cross_wind_mean;
+                packet_data.cross_windspeed = (double)cross_wind;
+                packet_data.cross_windspeed_mean = (double)cross_wind_mean;
                 packet_data.head_windspeed = (double)head_wind_mean;
                 packet_data.baro_pressure = pressure;
                 packet_data.maws_hour = hour;
@@ -685,10 +697,10 @@ static void *serial_read_thread(void *arg)
 }
 
 /**
- * Callback function for timer 1.
+ * Callback function for packet timer.
  * Send packet data periodically to clients.
  */
-static void timer1_handler(size_t timer_id, void *user_data)
+static void packet_timer_handler(size_t timer_id, void *user_data)
 {
     NOTUSED(timer_id);
     NOTUSED(user_data);
@@ -714,6 +726,41 @@ static void timer1_handler(size_t timer_id, void *user_data)
     pthread_mutex_unlock(&lock_packetdata_update);
 
     lws_callback_on_writable_all_protocol(context, &protocols[1]);
+}
+
+/**
+ * Callback function for record timer.
+ * Log data packet into file if record is active.
+ */
+static void record_timer_handler(size_t timer_id, void *user_data)
+{
+    NOTUSED(timer_id);
+    NOTUSED(user_data);
+    time_t now = time(NULL);
+    struct tm *t = localtime(&now);
+
+    if (record_fp != NULL && packet_data.record_status != 0)
+    {
+        pthread_mutex_trylock(&lock_packetdata_update);
+        fprintf(record_fp, "%02u:%02u:%02u;%0.1f;%u;%0.1f;%u;%0.1f;%0.1f;%0.1f;%0.1f;%.0f;%02u:%02u:%02u;%u\n",
+                t->tm_hour,
+                t->tm_min,
+                t->tm_sec,
+                packet_data.temperature,
+                packet_data.humidity,
+                packet_data.baro_pressure,
+                packet_data.wind_direction,
+                packet_data.windspeed,
+                packet_data.cross_windspeed,
+                packet_data.windspeed_mean,
+                packet_data.cross_windspeed_mean,
+                packet_data.gps_time,
+                packet_data.maws_hour,
+                packet_data.maws_min,
+                packet_data.maws_sec,
+                packet_data.top_number);
+        pthread_mutex_unlock(&lock_packetdata_update);
+    }
 }
 
 #ifdef TESTSERIAL
@@ -839,7 +886,8 @@ static void test_handler(size_t timer_id, void *user_data)
             packet_data.wind_direction_mean = (unsigned short)wind_direction_mean;
             packet_data.windspeed = windspeed;
             packet_data.windspeed_mean = windspeed_mean;
-            packet_data.cross_windspeed = (double)cross_wind_mean;
+            packet_data.cross_windspeed = (double)cross_wind;
+            packet_data.cross_windspeed_mean = (double)cross_wind_mean;
             packet_data.head_windspeed = (double)head_wind_mean;
             packet_data.baro_pressure = pressure;
             packet_data.maws_hour = hour;
@@ -945,7 +993,8 @@ int main(int argc, char **argv)
     }
 
     initialize_timer();
-    packet_timer = start_timer(500, timer1_handler, TIMER_PERIODIC, NULL);
+    packet_timer = start_timer(500, packet_timer_handler, TIMER_PERIODIC, NULL);
+    record_timer = start_timer(1000, record_timer_handler, TIMER_PERIODIC, NULL);
 
 #ifdef TESTSERIAL
     test_fp = fopen("/tmp/vaisalla_log.txt", "r");

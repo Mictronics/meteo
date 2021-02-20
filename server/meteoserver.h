@@ -1,6 +1,6 @@
 // Part of WebMeteo, a Vaisalla weather data visualization.
 //
-// Copyright (c) 2020 Michael Wolf <michael@mictronics.de>
+// Copyright (c) 2021 Michael Wolf <michael@mictronics.de>
 //
 // This file is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -36,6 +36,7 @@ typedef struct __attribute__((__packed__))
     double windspeed;
     double windspeed_mean;
     double cross_windspeed;
+    double cross_windspeed_mean;
     double head_windspeed;
     double baro_qfe;
     double baro_qnh;
