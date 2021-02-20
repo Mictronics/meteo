@@ -1,6 +1,6 @@
 // Part of WebMeteo, a Vaisalla weather data visualization.
 //
-// Copyright (c) 2020 Michael Wolf <michael@mictronics.de>
+// Copyright (c) 2021 Michael Wolf <michael@mictronics.de>
 //
 // This file is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -58,6 +58,7 @@ const serverData = Object.seal({
   windspeed: 0,
   windspeedMean: 0,
   crossWindspeed: 0,
+  crossWindspeedMean: 0,
   headWindspeed: 0,
   QFE: 0,
   QNH: 0,
@@ -117,28 +118,29 @@ function connect8080() {
       serverData.windspeed = dv.getFloat64(56, true);
       serverData.windspeedMean = dv.getFloat64(64, true);
       serverData.crossWindspeed = dv.getFloat64(72, true);
-      serverData.headWindspeed = dv.getFloat64(80, true);
-      serverData.QFE = dv.getFloat64(88, true);
-      serverData.QNH = dv.getFloat64(96, true);
-      serverData.gpsTime = dv.getFloat64(104, true);
-      serverData.localTime = dv.getFloat64(112, true);
-      serverData.flightNumber = dv.getInt16(120, true);
-      serverData.runwayHeading = dv.getInt16(122, true);
-      serverData.runwayElevation = dv.getInt16(124, true);
-      serverData.windDirection = dv.getInt16(126, true);
-      serverData.windDirectionMean = dv.getInt16(128, true);
-      serverData.barometerHeight = dv.getInt8(130, true);
-      serverData.maws_hour = dv.getInt8(131, true);
-      serverData.maws_minute = dv.getInt8(132, true);
-      serverData.maws_second = dv.getInt8(133, true);
-      serverData.humidity = dv.getInt8(134, true);
-      serverData.topNumber = dv.getInt8(135, true);
-      serverData.gpsStatus = dv.getInt8(136, true);
-      serverData.gpsMode = dv.getInt8(137, true);
-      serverData.gpsSatellitesVisible = dv.getInt8(138, true);
-      serverData.gpsSatellitesUsed = dv.getInt8(139, true);
-      serverData.recordStatus = dv.getInt8(140, true);
-      serverData.fromToStatus = dv.getInt8(141, true);
+      serverData.crossWindspeedMean = dv.getFloat64(80, true);
+      serverData.headWindspeed = dv.getFloat64(88, true);
+      serverData.QFE = dv.getFloat64(96, true);
+      serverData.QNH = dv.getFloat64(104, true);
+      serverData.gpsTime = dv.getFloat64(112, true);
+      serverData.localTime = dv.getFloat64(120, true);
+      serverData.flightNumber = dv.getInt16(128, true);
+      serverData.runwayHeading = dv.getInt16(130, true);
+      serverData.runwayElevation = dv.getInt16(132, true);
+      serverData.windDirection = dv.getInt16(134, true);
+      serverData.windDirectionMean = dv.getInt16(136, true);
+      serverData.barometerHeight = dv.getInt8(138, true);
+      serverData.maws_hour = dv.getInt8(139, true);
+      serverData.maws_minute = dv.getInt8(140, true);
+      serverData.maws_second = dv.getInt8(141, true);
+      serverData.humidity = dv.getInt8(142, true);
+      serverData.topNumber = dv.getInt8(143, true);
+      serverData.gpsStatus = dv.getInt8(144, true);
+      serverData.gpsMode = dv.getInt8(145, true);
+      serverData.gpsSatellitesVisible = dv.getInt8(146, true);
+      serverData.gpsSatellitesUsed = dv.getInt8(147, true);
+      serverData.recordStatus = dv.getInt8(148, true);
+      serverData.fromToStatus = dv.getInt8(149, true);
 
       self.postMessage({ cmd: 'data', data: serverData });
     }
