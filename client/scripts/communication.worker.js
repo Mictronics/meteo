@@ -29,6 +29,7 @@ const ServerCmd = Object.freeze({
  */
 const serverData = Object.seal({
   recordStatus: 0,
+  localTime: 0,
   maws_second: 0,
   maws_minute: 0,
   maws_hour: 0,
