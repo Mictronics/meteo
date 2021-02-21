@@ -17,10 +17,5 @@ include /usr/share/dpkg/default.mk
 override_dh_auto_build:
 	dh_auto_build
 
-override_dh_install:
-	dh_install
-	install -d debian/meteoserver/usr/bin
-	cp -a server/meteoserver debian/meteoserver/usr/bin/meteoserver
-
 %:
 	dh $@ --with=systemd
