@@ -37,7 +37,7 @@
 #include "timer.h"
 #include "meteoserver.h"
 
-#define TESTSERIAL
+//#define TESTSERIAL
 
 #ifdef TESTSERIAL
 FILE *test_fp;
@@ -484,7 +484,8 @@ static void sighandler(int sig)
     lws_context_destroy(context);
 
 #ifdef TESTSERIAL
-    if(test_fp != NULL) {
+    if (test_fp != NULL)
+    {
         fclose(test_fp);
     }
 #endif
