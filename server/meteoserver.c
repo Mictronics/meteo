@@ -796,7 +796,7 @@ static void test_handler(size_t timer_id, void *user_data)
     double wind_comp1;
     double wind_comp2;
 
-    if (fgets(test_buf, 1024, test_fp) == NULL)
+    if (test_fp == NULL || fgets(test_buf, 1024, test_fp) == NULL)
     {
         return;
     }
