@@ -927,15 +927,12 @@ int main(int argc, char **argv)
     info.port = 8080;
     info.iface = "127.0.0.1";
     info.protocols = protocols;
-    info.ssl_cert_filepath = NULL;
-    info.ssl_private_key_filepath = NULL;
     info.gid = -1;
     info.uid = -1;
     info.max_http_header_pool = 16;
     info.options = 0;
     info.extensions = NULL;
     info.timeout_secs = 5;
-    info.ssl_cipher_list = NULL;
     info.max_http_header_data = 2048;
     /* Parse the command line options */
     if (argp_parse(&argp, argc, argv, 0, 0, 0))
