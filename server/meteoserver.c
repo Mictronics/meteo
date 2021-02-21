@@ -484,7 +484,9 @@ static void sighandler(int sig)
     lws_context_destroy(context);
 
 #ifdef TESTSERIAL
-    fclose(test_fp);
+    if(test_fp != NULL) {
+        fclose(test_fp);
+    }
 #endif
 
     exit(EXIT_SUCCESS);
