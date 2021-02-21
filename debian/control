@@ -9,6 +9,6 @@ Vcs-Git: https://github.com/Mictronics/meteo.git
 
 Package: meteo
 Architecture: any
-Depends: ${misc:Depends}, libgps-dev, libpthread-stubs0-dev, libwebsockets-dev
+Depends: ${misc:Depends}, libgps-dev, libpthread-stubs0-dev
 Description: Websocket server for Vaisalla weather station
  This server provides Vaisalla weather data to web application via websocket.
