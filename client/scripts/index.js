@@ -134,8 +134,18 @@ function UpdateGui(serverData) {
   document.getElementById('gpsStatus').innerHTML = `${gpsMode[serverData.gpsMode]} ${gpsStatus[serverData.gpsStatus]}`;
   document.getElementById('gpsDOP').innerHTML = `${serverData.gpsPDOP.toFixed(1)}/${serverData.gpsHDOP.toFixed(1)}`;
 
+  // Time sync button only enabled when GPS time is valid
+  let btn = document.getElementById('timeSyncButton');
+  if (serverData.gpsMode > 1) {
+    btn.classList.replace('btn-outline-light', 'btn-info');
+    btn.classList.remove('disabled');
+  } else {
+    btn.classList.replace('btn-info', 'btn-light');
+    btn.classList.add('disabled');
+  }
+
   // From-To button status
-  const btn = document.getElementById('fromToButton');
+  btn = document.getElementById('fromToButton');
   if (serverData.fromToStatus) {
     btn.classList.replace('btn-secondary', 'btn-warning');
   } else {
@@ -229,6 +239,14 @@ function OnRunwayHeadingInputChange(ev) {
   });
 }
 
+// Start time sync from GPS to MAWS
+function OnTimeSyncButtonClick(ev) {
+  serverCommunicationWorker.postMessage({
+    cmd: 'timesync',
+    data: null
+  });
+}
+
 // Show new noty of specific type
 function showNoty(text, type) {
   new Noty({
@@ -267,6 +285,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Add event handlers
   document.getElementById('recordButton').addEventListener('click', OnRecordButtonClick);
   document.getElementById('fromToButton').addEventListener('click', OnFromToButtonClick);
+  document.getElementById('timeSyncButton').addEventListener('click', OnTimeSyncButtonClick);
   document.getElementById('elevationInput').addEventListener('change', OnElevationInputChange);
   document.getElementById('runwayHeadingInput').addEventListener('change', OnRunwayHeadingInputChange);
 

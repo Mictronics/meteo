@@ -21,7 +21,8 @@ const ServerCmd = Object.freeze({
   Stop: 0x2b,
   FromTo: 0x3c,
   Elevation: 0x4d,
-  Heading: 0x5e
+  Heading: 0x5e,
+  TimeSync: 0x6f
 });
 
 /*
@@ -228,6 +229,14 @@ self.onmessage = (e) => {
         const dv = new DataView(buf);
         dv.setUint8(0, ServerCmd.Heading);
         dv.setUint16(1, msg.data.heading, true);
+        socket8080.send(buf);
+      }
+      break;
+    case 'timesync':
+      if (socket8080 !== null && socket8080.readyState === 1) {
+        const buf = new ArrayBuffer(1);
+        const dv = new DataView(buf);
+        dv.setUint8(0, ServerCmd.TimeSync);
         socket8080.send(buf);
       }
       break;
