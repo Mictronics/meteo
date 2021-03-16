@@ -177,7 +177,7 @@ function UpdateGui(serverData) {
   ).attributes.transform.value = `matrix(1,0,0,1,70,70) rotate(${serverData.windDirectionMean},0,0)`;
 
   // Update charts
-  windspeedChart.Update(serverData.windspeedMean, serverData.crossWindspeed);
+  windspeedChart.Update(Math.abs(serverData.windspeedMean), Math.abs(serverData.crossWindspeed));
   humidityChart.Update(serverData.temperature, serverData.humidity);
 }
 
