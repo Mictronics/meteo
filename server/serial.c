@@ -146,6 +146,26 @@ void close_serial(void)
 
 char *read_serial(ssize_t *len)
 {
-    *len = read(serial_fd, serial_buffer, sizeof(serial_buffer) - 1);
-    return serial_buffer;
+    if (serial_fd != -1)
+    {
+        *len = read(serial_fd, serial_buffer, sizeof(serial_buffer) - 1);
+        return serial_buffer;
+    }
+    else
+    {
+        *len = -1;
+        return NULL;
+    }
+}
+
+ssize_t write_serial(const char *buf, size_t len)
+{
+    if (serial_fd != -1)
+    {
+        return write(serial_fd, buf, len);
+    }
+    else
+    {
+        return -1;
+    }
 }
