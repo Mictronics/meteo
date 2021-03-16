@@ -104,6 +104,7 @@ struct per_vhost_data
     struct per_session_data *pss_list; // linked-list of live pss
 };
 
+static void *serial_read_thread(void *arg);
 static error_t parse_opt(int key, char *arg, struct argp_state *state);
 const char *argp_program_version = "meteoserver v1.0";
 const char args_doc[] = "";
@@ -257,6 +258,56 @@ static void stop_recording(void)
 }
 
 /**
+ * Sync MAWS time with GPS time.
+ */
+static void sync_maws_time(void)
+{
+    char *buf;
+    ssize_t len = 0;
+    // Stop meteo data reception
+    serial_thread_exit = true;
+    pthread_join(serial_thread, NULL); /* Wait on serial read thread exit */
+    // Reopen serial connection to MAWS
+    if (open_serial() != EXIT_FAILURE)
+    {
+        // Open service connection to MAWS
+        if (write_serial("open\r\n", 6) != -1)
+        {
+            sleep(1);
+            buf = read_serial(&len);
+            // Check for command prompt
+            if (buf != NULL && len > 0 && strchr(buf, '>') != NULL)
+            {
+                pthread_mutex_trylock(&lock_packetdata_update);
+                time_t now = (time_t)packet_data.gps_time;
+                struct tm *t = gmtime(&now);
+                pthread_mutex_unlock(&lock_packetdata_update);
+                // Sync GPS time with MAWS
+                strftime(buf, 1024, "time %H %M %S %y %m %d\r\n", t);
+                write_serial(buf, 24);
+                sleep(1);
+                // Set UTC time zone in MAWS
+                write_serial("timezone 0\r\n", 12);
+                sleep(1);
+                // Close service connection
+                write_serial("close\r\n", 7);
+                lwsl_info("GPS time synced to MAWS\n");
+            } else {
+                lwsl_err("Opening MAWS service connection failed\n");
+            }
+        }
+        close_serial();
+    }
+    else
+    {
+        lwsl_err("Serial device init failed\n");
+    }
+    /* Restart reading serial data from weather station */
+    serial_thread_exit = false;
+    pthread_create(&serial_thread, NULL, serial_read_thread, NULL);
+}
+
+/**
  * Handle requests from client.
  */
 static void handle_client_request(void *in, size_t len)
@@ -305,6 +356,12 @@ static void handle_client_request(void *in, size_t len)
         if (len < 3)
             break;
         runway_heading = p->val;
+        break;
+    case SERVER_CMD_SYNC_TIME:
+        // Sync GPS time to MAWS
+        if (len < 1)
+            break;
+        sync_maws_time();
         break;
     default:
         break;

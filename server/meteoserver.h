@@ -23,6 +23,7 @@
 #define SERVER_CMD_FROMTO 0x3c
 #define SERVER_CMD_ELEVATION 0x4d
 #define SERVER_CMD_HEADING 0x5e
+#define SERVER_CMD_SYNC_TIME 0x6f
 
 typedef struct __attribute__((__packed__))
 {
