@@ -31,6 +31,7 @@
 #include <errno.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <math.h>
 #include "timespec.h"
 #include "help.h"
 #include "serial.h"
@@ -826,10 +827,10 @@ static void record_timer_handler(size_t timer_id, void *user_data)
                 packet_data.humidity,
                 packet_data.baro_pressure,
                 packet_data.wind_direction,
-                packet_data.windspeed,
-                packet_data.cross_windspeed,
-                packet_data.windspeed_mean,
-                packet_data.cross_windspeed_mean,
+                fabs(packet_data.windspeed),
+                fabs(packet_data.cross_windspeed),
+                fabs(packet_data.windspeed_mean),
+                fabs(packet_data.cross_windspeed_mean),
                 packet_data.gps_time,
                 packet_data.maws_hour,
                 packet_data.maws_min,
