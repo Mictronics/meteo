@@ -25,7 +25,7 @@ TEMPLATECRON=/usr/share/$NAME/cron-template
 case "$1" in
     configure)
         . /usr/share/debconf/confmodule
-
+        
         if ! getent passwd "$RUNAS" >/dev/null
         then
             adduser --system --home /usr/share/$NAME --no-create-home --quiet "$RUNAS"
@@ -35,11 +35,12 @@ case "$1" in
         # Create folder to record meteo data
         mkdir -p /var/meteodata
         chmod 755 /var/meteodata
+        chown -R meteo /var/meteodata
     ;;
-
+    
     abort-upgrade|abort-remove|abort-deconfigure)
     ;;
-
+    
     *)
         echo "postinst called with unknown argument \`$1'" >&2
         exit 1
