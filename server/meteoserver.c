@@ -263,6 +263,7 @@ static void stop_recording(void)
 static void sync_maws_time(void)
 {
     char *buf;
+    char *res = NULL;
     ssize_t len = 0;
     // Stop meteo data reception
     serial_thread_exit = true;
@@ -274,9 +275,22 @@ static void sync_maws_time(void)
         if (write_serial("open\r\n", 6) != -1)
         {
             sleep(1);
-            buf = read_serial(&len);
-            // Check for command prompt
-            if (buf != NULL && len > 0 && strchr(buf, '>') != NULL)
+            // Read lines until we find service notification
+            for (int i = 0; i < 10; i++)
+            {
+                buf = read_serial(&len);
+                // Check for service connection
+                if (buf != NULL && len > 0)
+                {
+                    res = strstr(buf, "Service");
+                    if (res != NULL)
+                    {
+                        break;
+                    }
+                }
+            }
+
+            if (res != NULL)
             {
                 pthread_mutex_trylock(&lock_packetdata_update);
                 time_t now = (time_t)packet_data.gps_time;
@@ -289,13 +303,15 @@ static void sync_maws_time(void)
                 // Set UTC time zone in MAWS
                 write_serial("timezone 0\r\n", 12);
                 sleep(1);
-                // Close service connection
-                write_serial("close\r\n", 7);
-                lwsl_info("GPS time synced to MAWS\n");
-            } else {
+                lwsl_err("GPS time synced to MAWS\n");
+            }
+            else
+            {
                 lwsl_err("Opening MAWS service connection failed\n");
             }
         }
+        // Try to close service connection in any case
+        write_serial("close\r\n", 7);
         close_serial();
     }
     else
