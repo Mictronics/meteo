@@ -62,7 +62,7 @@ function UpdateGui(serverData) {
   d = new Date(
     d.getUTCFullYear(),
     d.getUTCMonth(),
-    d.getUTCDay(),
+    d.getDate(),
     serverData.maws_hour,
     serverData.maws_minute,
     serverData.maws_second,
@@ -140,7 +140,7 @@ function UpdateGui(serverData) {
     btn.classList.replace('btn-outline-light', 'btn-info');
     btn.classList.remove('disabled');
   } else {
-    btn.classList.replace('btn-info', 'btn-light');
+    btn.classList.replace('btn-info', 'btn-outline-light');
     btn.classList.add('disabled');
   }
 
