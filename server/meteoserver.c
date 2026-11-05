@@ -185,7 +185,7 @@ static void start_recording(const t_start_cmd *start_cmd)
     if (record_fp != NULL)
         return; // Already recording
 
-    localtime_r(&now, &t);
+    gmtime_r(&now, &t); // UTC, like the MAWS and GPS time
 
     pthread_mutex_lock(&lock_packetdata);
     if (start_cmd->flight_number > 0)
@@ -734,7 +734,7 @@ static void record_timer_cb(lws_sorted_usec_list_t *sul)
         return;
 
     time_t now = ts.tv_sec;
-    localtime_r(&now, &t);
+    gmtime_r(&now, &t); // UTC, like the MAWS and GPS time
 
     pthread_mutex_lock(&lock_packetdata);
     p = packet_data;

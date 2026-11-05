@@ -203,7 +203,7 @@ function UpdateGui(serverData) {
   $('headWindspeed').textContent = Math.abs(serverData.headWindspeed).toFixed(1);
 
   // Update charts
-  windspeedChart.Update(Math.abs(serverData.windspeedMean), Math.abs(serverData.crossWindspeed));
+  windspeedChart.Update(Math.abs(serverData.windspeedMean), Math.abs(serverData.crossWindspeedMean));
   humidityChart.Update(serverData.temperature, serverData.humidity);
 }
 
