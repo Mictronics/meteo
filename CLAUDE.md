@@ -11,6 +11,7 @@ WebMeteo visualizes data from a Vaisala weather station (MAWS) for EASA acoustic
 - Build server: `make` (outputs `server/meteoserver`; needs `libwebsockets-dev` >= 4.0, `libgps-dev`, pthread). `make clean` to clean.
 - Test: `make test` builds and runs `server/test_average.c`, the moving-average self-check. It needs no external libraries, so it also runs where gpsd headers are missing.
 - Debian package: `dpkg-buildpackage -b -uc`
+- Release: commit everything, then `make release V=X.Y.Z` (semver). It edits `debian/changelog` and `package.json`, commits and creates the annotated tag `vX.Y.Z`, without pushing.
 - Lint client: `npm run lint` (eslint, airbnb config, `client/` only)
 - Run: `server/meteoserver -p10024 [--serial /dev/ttyUSB0] [--baudrate 9600] [--no-gps] [-d level]`. See `server/help.h` for all options.
 - The only automated test is the moving-average self-check above; the rest is checked by hand. `server/vaisalla_log.txt` is a sample of raw serial output, usable to feed a fake serial port.
@@ -36,5 +37,6 @@ WebMeteo visualizes data from a Vaisala weather station (MAWS) for EASA acoustic
 ## Gotchas
 
 - Changing `t_packet_data` or the `SERVER_CMD_*` values requires matching edits in `communication.worker.js`.
+- The version is never edited by hand. The git tag is the truth (`tools/version.sh`); `make` generates the gitignored `server/version.h` and `client/scripts/version.js`, and `debian/rules` takes it from `debian/changelog`.
 - The server has no authentication and listens on all interfaces unless `-i` is given. Firewall the port.
 - Recordings go to `/var/meteodata` (override with `-DRECORD_DIR=\"...\"` at compile time, handy for tests).

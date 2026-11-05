@@ -14,6 +14,9 @@ export DEB_BUILD_MAINT_OPTIONS = hardening=+all
 DPKG_EXPORT_BUILDFLAGS = 1
 include /usr/share/dpkg/default.mk
 
+# The build may run without a git checkout, take the version from the changelog.
+export VERSION = $(DEB_VERSION)
+
 override_dh_auto_build:
 	dh_auto_build
 

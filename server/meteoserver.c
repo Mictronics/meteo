@@ -36,6 +36,7 @@
 #include "serial.h"
 #include "average.h"
 #include "meteoserver.h"
+#include "version.h"
 
 #define NOTUSED(V) ((void)V)
 #define MAX_CLIENTS 50
@@ -98,7 +99,7 @@ struct per_vhost_data
 };
 
 static error_t parse_opt(int key, char *arg, struct argp_state *state);
-const char *argp_program_version = "meteoserver v1.0";
+const char *argp_program_version = "meteoserver " METEO_VERSION;
 const char args_doc[] = "";
 const char doc[] = "Websocket Server for Vaisalla weather station\nLicense GPL-3+\n(C) 2021 Michael Wolf\n"
                    "This server provides weather and GPS data to web application via websocket.";

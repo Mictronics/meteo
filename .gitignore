@@ -5,3 +5,5 @@ meteoserver
 package-lock.json
 *.d
 server/test_average
+server/version.h
+client/scripts/version.js

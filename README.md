@@ -20,7 +20,7 @@ Nothing special, just build it `dpkg-buildpackage -b -uc`.
 
 ### Installation
 
-Install package `sudo dpkg -i meteo_1.0.0_armhf.deb`.
+Install package `sudo dpkg -i meteo_<version>_armhf.deb`.
 
 ### Removal
 
@@ -32,6 +32,17 @@ To configure the service add commandline options to `/etc/default/meteo` as requ
 
 The websocket server has no authentication and listens on all interfaces unless
 `-i <address>` is given. Restrict access to the port (default in the package: 10024) with a firewall.
+
+## Versioning and releases
+
+Versions follow [semver](https://semver.org). The git tag `vX.Y.Z` is the single source of truth.
+Builds between releases are named like `1.1.0-3-g1a2b3c4` (3 commits after v1.1.0).
+The version is shown by `meteoserver --version` and in the footer of the web page.
+Package builds take it from `debian/changelog` instead.
+
+To release, commit all changes and run `make release V=1.2.0`. This adds a `debian/changelog`
+entry from the commit subjects since the last tag, sets `package.json`, commits and creates the
+annotated tag `v1.2.0`. Nothing is pushed; publish with `git push origin HEAD v1.2.0`.
 
 ## Building manually
 
