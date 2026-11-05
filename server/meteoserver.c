@@ -18,63 +18,63 @@
 #include <libwebsockets.h>
 #include <pthread.h>
 #include <string.h>
-#include <getopt.h>
 #include <syslog.h>
 #include <gps.h>
-#include <linux/socket.h>
-#include <linux/un.h>
-#include <sys/reboot.h>
-#include <sys/ioctl.h>
 #include <time.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdbool.h>
+#include <stdatomic.h>
+#include <stdint.h>
+#include <signal.h>
+#include <unistd.h>
 #include <errno.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <math.h>
-#include "timespec.h"
 #include "help.h"
 #include "serial.h"
-#include "timer.h"
+#include "average.h"
 #include "meteoserver.h"
 
 #define NOTUSED(V) ((void)V)
-#define WSBUFFERSIZE 512 /* Byte */
+#define MAX_CLIENTS 50
+#define MAX_ELEVATION_FT 29030 /* Same limit as the client input */
+#ifndef RECORD_DIR
+#define RECORD_DIR "/var/meteodata"
+#endif
+#define PACKET_INTERVAL_US 500000 /* Websocket update rate */
+#define RECORD_INTERVAL_US 1000000
 // See ICAO doc 7488
 #define EARTH_G 9.80665
 #define R 287.05287
 #define TREF 288.15
 #define ALPHA -0.0065
-#define MOVING_AVG_LENGTH 30 // Moving average length in seconds
 
-static int debug_level = 0;
+static int debug_level = LLL_ERR | LLL_WARN | LLL_NOTICE;
 static int uid = -1, gid = -1, num_clients = 0;
 static char interface_name[255] = "";
 static const char *iface = NULL;
 static int syslog_options = LOG_PID | LOG_PERROR;
-static size_t packet_timer = 0;
-static size_t record_timer = 0;
-static t_packet_data packet_data;
-#if GPSD_API_MAJOR_VERSION < 9
-static struct timespec ts_now, ts_diff, ts_gps;
-#else
-static timespec_t ts_now, ts_diff, ts_gps;
-#endif
 
 #ifndef LWS_NO_DAEMONIZE
 static int daemonize = 0;
 #endif
 static struct lws_context *context;
 static struct lws_context_creation_info info;
-static unsigned char wsbuffer[WSBUFFERSIZE];
-static unsigned char *pwsbuffer = wsbuffer;
-static int wsbuffer_len = 0;
-pthread_mutex_t lock_established_conns;
-pthread_t gps_thread;
-pthread_t serial_thread;
-pthread_mutex_t lock_packetdata_update;
-static bool gps_thread_exit = false;
-static bool serial_thread_exit = false;
+static lws_sorted_usec_list_t packet_sul;
+static lws_sorted_usec_list_t record_sul;
+
+/* Shared between serial, GPS and the websocket (main) thread. Guarded by lock_packetdata. */
+static t_packet_data packet_data;
+static pthread_mutex_t lock_packetdata = PTHREAD_MUTEX_INITIALIZER;
+
+static pthread_t gps_thread;
+static pthread_t serial_thread;
+static atomic_bool gps_thread_exit = false;
+static atomic_bool serial_thread_exit = false;
+static atomic_bool sync_requested = false;
+static volatile sig_atomic_t quit_requested = 0;
 
 /**
  * One of these is created for each client connecting.
@@ -97,7 +97,6 @@ struct per_vhost_data
     struct per_session_data *pss_list; // linked-list of live pss
 };
 
-static void *serial_read_thread(void *arg);
 static error_t parse_opt(int key, char *arg, struct argp_state *state);
 const char *argp_program_version = "meteoserver v1.0";
 const char args_doc[] = "";
@@ -105,33 +104,22 @@ const char doc[] = "Websocket Server for Vaisalla weather station\nLicense GPL-3
                    "This server provides weather and GPS data to web application via websocket.";
 static struct argp argp = {options, parse_opt, args_doc, doc, NULL, NULL, NULL};
 
-/* GPS data source */
-static struct
-{
-    char *spec;
-    char *server;
-    char *port;
-    char *device;
-} gpssource;
-static struct gps_data_t gpsdata;
+static struct gps_data_t gpsdata; // Only touched by the GPS thread
 static bool gps_available = true;
 
-static FILE *record_fp;
+static FILE *record_fp; // Only touched by the main thread
 
-// Storage for moving average over 30s
-static double temperature_arr[MOVING_AVG_LENGTH];
-static unsigned char humidity_arr[MOVING_AVG_LENGTH];
-static double windspeed_arr[MOVING_AVG_LENGTH];
-static double cross_wind_arr[MOVING_AVG_LENGTH];
-static double head_wind_arr[MOVING_AVG_LENGTH];
-static double wind_comp1_arr[MOVING_AVG_LENGTH];
-static double wind_comp2_arr[MOVING_AVG_LENGTH];
-static unsigned short wind_direction_arr[MOVING_AVG_LENGTH];
-static unsigned char moving_avg_index = 0;
+static const unsigned char height_qfe = 1; // Height difference between barometer and reference level[m]
 
-static unsigned short runway_elevation = 1204; // Elevation[ft](Manching)
-static unsigned char height_qfe = 1;           // Height difference between barometer and reference level[m]
-static unsigned short runway_heading = 248;    // Runway heading[deg](Manching)
+static long parse_number(const char *arg, long min, long max, struct argp_state *state, const char *name)
+{
+    char *end;
+    errno = 0;
+    long v = strtol(arg, &end, 10);
+    if (errno != 0 || end == arg || *end != '\0' || v < min || v > max)
+        argp_error(state, "invalid %s: '%s'", name, arg);
+    return v;
+}
 
 /**
  * Function parsing the arguments provided on run
@@ -141,12 +129,11 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state)
     switch (key)
     {
     case 'i':
-        strncpy(interface_name, arg, sizeof interface_name);
-        interface_name[(sizeof interface_name) - 1] = '\0';
+        snprintf(interface_name, sizeof interface_name, "%s", arg);
         iface = interface_name;
         break;
     case 'p':
-        info.port = atoi(arg);
+        info.port = (int)parse_number(arg, 1, 65535, state, "port");
         break;
     case OPTSERIAL:
         set_serial_interface(arg);
@@ -155,10 +142,10 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state)
         set_baudrate(arg);
         break;
     case OPTGROUP:
-        gid = atoi(arg);
+        gid = (int)parse_number(arg, -1, INT32_MAX, state, "group id");
         break;
     case OPTUSER:
-        uid = atoi(arg);
+        uid = (int)parse_number(arg, -1, INT32_MAX, state, "user id");
         break;
 #ifndef LWS_NO_DAEMONIZE
     case 'D':
@@ -167,11 +154,10 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state)
         break;
 #endif
     case 'd':
-        debug_level = atoi(arg);
+        debug_level = (int)parse_number(arg, 0, 0xffff, state, "debug level");
         break;
     case OPTNOGPS:
         gps_available = false;
-        lwsl_notice("GPS disabled.\n");
         break;
     case ARGP_KEY_END:
         if (state->arg_num > 0)
@@ -185,16 +171,22 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state)
 }
 
 /**
- * Start recording.
+ * Start recording. Runs on the main thread.
  */
-static void start_recording(t_start_cmd *start_cmd)
+static void start_recording(const t_start_cmd *start_cmd)
 {
     char path[FILENAME_MAX];
-    struct stat st = {0};
     time_t now = time(NULL);
-    struct tm *t = localtime(&now);
+    struct tm t;
+    unsigned short flight_number;
+    unsigned char top_number;
 
-    pthread_mutex_trylock(&lock_packetdata_update);
+    if (record_fp != NULL)
+        return; // Already recording
+
+    localtime_r(&now, &t);
+
+    pthread_mutex_lock(&lock_packetdata);
     if (start_cmd->flight_number > 0)
     {
         packet_data.flight_number = start_cmd->flight_number;
@@ -204,174 +196,183 @@ static void start_recording(t_start_cmd *start_cmd)
     {
         packet_data.top_number = start_cmd->top_number;
     }
+    flight_number = packet_data.flight_number;
+    top_number = packet_data.top_number;
+    pthread_mutex_unlock(&lock_packetdata);
+
     // Create subfolder by date if not exists
-    snprintf(path, FILENAME_MAX, "/var/meteodata/%02u%02u%04u", t->tm_mday, t->tm_mon + 1, 1900 + t->tm_year);
-    if (stat(path, &st) == -1)
+    snprintf(path, sizeof path, RECORD_DIR "/%02u%02u%04u", t.tm_mday, t.tm_mon + 1, 1900 + t.tm_year);
+    if (mkdir(path, 0755) == -1 && errno != EEXIST)
     {
-        mkdir(path, 0755);
+        lwsl_err("Error creating folder %s: %s\n", path, strerror(errno));
+        return;
     }
+
     // Create file by flight and top number
-    snprintf(path, FILENAME_MAX, "/var/meteodata/%02u%02u%04u/F%04u_REC%03u_MeteoData_%02u%02u%02u.csv",
-             t->tm_mday,
-             t->tm_mon + 1,
-             1900 + t->tm_year,
-             packet_data.flight_number,
-             packet_data.top_number,
-             t->tm_hour,
-             t->tm_min,
-             t->tm_sec);
+    snprintf(path, sizeof path, RECORD_DIR "/%02u%02u%04u/F%04u_REC%03u_MeteoData_%02u%02u%02u.csv",
+             t.tm_mday,
+             t.tm_mon + 1,
+             1900 + t.tm_year,
+             flight_number,
+             top_number,
+             t.tm_hour,
+             t.tm_min,
+             t.tm_sec);
     record_fp = fopen(path, "a");
-    if (record_fp != NULL)
-    {
-        // Add file header
-        fputs("LOG_TIME;TEMP;HUM;PRESSURE;DIRECTION;WIND_TOTAL;WIND_LAT;MEAN_WIND_TOTAL;MEAN_WIND_LAT;GPS_EPOCH_RECORDED;TIME_MAWS_RECORDED;TOP_NUMBER\n", record_fp);
-        fputs("HH:MM:SS;degC;%;mbar;deg;kt;kt;kt;kt;seconds;HH:MM:SS;#\n", record_fp);
-        packet_data.record_status = 1;
-    }
-    else
+    if (record_fp == NULL)
     {
         lwsl_err("Error creating log file: %s\n", strerror(errno));
+        return;
     }
-    pthread_mutex_unlock(&lock_packetdata_update);
+
+    fputs("LOG_TIME;TEMP;HUM;PRESSURE;DIRECTION;WIND_TOTAL;WIND_LAT;MEAN_WIND_TOTAL;MEAN_WIND_LAT;GPS_EPOCH_RECORDED;TIME_MAWS_RECORDED;TOP_NUMBER\n", record_fp);
+    fputs("HH:MM:SS;degC;%;mbar;deg;kt;kt;kt;kt;seconds;HH:MM:SS;#\n", record_fp);
+    fflush(record_fp);
+
+    pthread_mutex_lock(&lock_packetdata);
+    packet_data.record_status = 1;
+    pthread_mutex_unlock(&lock_packetdata);
 }
 
 /**
- * Stop recording.
+ * Stop recording. Runs on the main thread.
  */
 static void stop_recording(void)
 {
-    pthread_mutex_trylock(&lock_packetdata_update);
-    if (record_fp != NULL)
+    bool was_recording = (record_fp != NULL);
+
+    if (was_recording)
     {
         fclose(record_fp);
+        record_fp = NULL;
+    }
+
+    pthread_mutex_lock(&lock_packetdata);
+    if (was_recording)
+    {
         packet_data.top_number += 1;
     }
     packet_data.record_status = 0;
-    pthread_mutex_unlock(&lock_packetdata_update);
+    pthread_mutex_unlock(&lock_packetdata);
+}
+
+static void write_str(const char *s)
+{
+    write_serial(s, strlen(s));
 }
 
 /**
- * Sync MAWS time with GPS time.
+ * Sync MAWS time with GPS time. Runs on the serial thread, which owns the serial port.
  */
 static void sync_maws_time(void)
 {
     char *buf;
-    char *res = NULL;
     ssize_t len = 0;
-    // Stop meteo data reception
-    serial_thread_exit = true;
-    pthread_join(serial_thread, NULL); /* Wait on serial read thread exit */
-    // Reopen serial connection to MAWS
-    if (open_serial() != EXIT_FAILURE)
-    {
-        // Open service connection to MAWS
-        if (write_serial("open\r\n", 6) != -1)
-        {
-            sleep(1);
-            // Read lines until we find service notification
-            for (int i = 0; i < 10; i++)
-            {
-                buf = read_serial(&len);
-                // Check for service connection
-                if (buf != NULL && len > 0)
-                {
-                    res = strstr(buf, "Service");
-                    if (res != NULL)
-                    {
-                        break;
-                    }
-                }
-            }
+    bool service = false;
 
-            if (res != NULL)
-            {
-                pthread_mutex_trylock(&lock_packetdata_update);
-                time_t now = (time_t)packet_data.gps_time;
-                struct tm *t = gmtime(&now);
-                pthread_mutex_unlock(&lock_packetdata_update);
-                // Sync GPS time with MAWS
-                strftime(buf, 1024, "time %H %M %S %y %m %d\r\n", t);
-                write_serial(buf, 24);
-                sleep(1);
-                // Set UTC time zone in MAWS
-                write_serial("timezone 0\r\n", 12);
-                sleep(1);
-                lwsl_err("GPS time synced to MAWS\n");
-            }
-            else
-            {
-                lwsl_err("Opening MAWS service connection failed\n");
-            }
-        }
-        // Try to close service connection in any case
-        write_serial("close\r\n", 7);
-        close_serial();
+    // Reopen serial connection to MAWS
+    close_serial();
+    if (open_serial() == EXIT_FAILURE)
+    {
+        lwsl_err("Serial device init failed\n");
+        return;
+    }
+
+    // Open service connection to MAWS
+    write_str("open\r\n");
+    sleep(1);
+    // Read lines until we find service notification
+    for (int i = 0; i < 10 && !service; i++)
+    {
+        buf = read_serial(&len);
+        service = (buf != NULL && len > 0 && strstr(buf, "Service") != NULL);
+    }
+
+    if (service)
+    {
+        char cmd[64];
+        struct tm t;
+
+        pthread_mutex_lock(&lock_packetdata);
+        time_t now = (time_t)packet_data.gps_time;
+        pthread_mutex_unlock(&lock_packetdata);
+        gmtime_r(&now, &t);
+
+        // Sync GPS time with MAWS
+        strftime(cmd, sizeof cmd, "time %H %M %S %y %m %d\r\n", &t);
+        write_str(cmd);
+        sleep(1);
+        // Set UTC time zone in MAWS
+        write_str("timezone 0\r\n");
+        sleep(1);
+        lwsl_notice("GPS time synced to MAWS\n");
     }
     else
     {
-        lwsl_err("Serial device init failed\n");
+        lwsl_err("Opening MAWS service connection failed\n");
     }
-    /* Restart reading serial data from weather station */
-    serial_thread_exit = false;
-    pthread_create(&serial_thread, NULL, serial_read_thread, NULL);
+
+    // Try to close service connection in any case, then start over with a clean port
+    write_str("close\r\n");
+    close_serial();
+    open_serial();
 }
 
 /**
  * Handle requests from client.
  */
-static void handle_client_request(void *in, size_t len)
+static void handle_client_request(const void *in, size_t len)
 {
-    unsigned char *id = (unsigned char *)in;
-    t_ushort_cmd *p = (t_ushort_cmd *)in;
+    const unsigned char *id = (const unsigned char *)in;
+    const t_ushort_cmd *p = (const t_ushort_cmd *)in;
 
     switch (*id)
     {
     case SERVER_CMD_START:
         // Start recording
-        if (len < 4)
+        if (len < sizeof(t_start_cmd))
             break;
-        start_recording((t_start_cmd *)in);
+        start_recording((const t_start_cmd *)in);
         break;
     case SERVER_CMD_STOP:
         // Stop recording
-        if (len < 1)
-            break;
         stop_recording();
         break;
     case SERVER_CMD_FROMTO:
         // Change runway heading from to status
-        if (len < 1)
-            break;
-        runway_heading = (runway_heading + 180) % 360;
-        pthread_mutex_trylock(&lock_packetdata_update);
-        if (packet_data.from_to_status == 0)
-        {
-            packet_data.from_to_status = 1;
-        }
-        else
-        {
-            packet_data.from_to_status = 0;
-        }
-        pthread_mutex_unlock(&lock_packetdata_update);
+        pthread_mutex_lock(&lock_packetdata);
+        packet_data.runway_heading = (packet_data.runway_heading + 180) % 360;
+        packet_data.from_to_status = !packet_data.from_to_status;
+        pthread_mutex_unlock(&lock_packetdata);
         break;
     case SERVER_CMD_ELEVATION:
         // Change runway elevation
-        if (len < 3)
+        if (len < sizeof(t_ushort_cmd) || p->val > MAX_ELEVATION_FT)
             break;
-        runway_elevation = p->val;
+        pthread_mutex_lock(&lock_packetdata);
+        packet_data.runway_elevation = p->val;
+        pthread_mutex_unlock(&lock_packetdata);
         break;
     case SERVER_CMD_HEADING:
         // Change runway heading
-        if (len < 3)
+        if (len < sizeof(t_ushort_cmd) || p->val > 359)
             break;
-        runway_heading = p->val;
+        pthread_mutex_lock(&lock_packetdata);
+        packet_data.runway_heading = p->val;
+        pthread_mutex_unlock(&lock_packetdata);
         break;
     case SERVER_CMD_SYNC_TIME:
-        // Sync GPS time to MAWS
-        if (len < 1)
-            break;
-        sync_maws_time();
+    {
+        // Sync GPS time to MAWS, done by the serial thread
+        pthread_mutex_lock(&lock_packetdata);
+        bool gps_valid = (packet_data.gps_mode > 1 && packet_data.gps_time > 0.0);
+        pthread_mutex_unlock(&lock_packetdata);
+        if (gps_valid)
+            atomic_store(&sync_requested, true);
+        else
+            lwsl_err("No valid GPS time, MAWS sync ignored\n");
         break;
+    }
     default:
         break;
     }
@@ -392,9 +393,9 @@ static int callback_broadcast(struct lws *wsi, enum lws_callback_reasons reason,
     switch (reason)
     {
     case LWS_CALLBACK_FILTER_NETWORK_CONNECTION:
-        if (num_clients > 50)
+        if (num_clients >= MAX_CLIENTS)
         {
-            lwsl_notice("50 clients already connected. New connection rejected...\n");
+            lwsl_notice("%d clients already connected. New connection rejected...\n", MAX_CLIENTS);
             return -1;
         }
         break;
@@ -402,13 +403,11 @@ static int callback_broadcast(struct lws *wsi, enum lws_callback_reasons reason,
         vhd = lws_protocol_vh_priv_zalloc(lws_get_vhost(wsi),
                                           lws_get_protocol(wsi),
                                           sizeof(struct per_vhost_data));
+        if (vhd == NULL)
+            return -1;
         vhd->context = lws_get_context(wsi);
         vhd->protocol = lws_get_protocol(wsi);
         vhd->vhost = lws_get_vhost(wsi);
-        break;
-
-    case LWS_CALLBACK_PROTOCOL_DESTROY:
-
         break;
 
     case LWS_CALLBACK_ESTABLISHED:
@@ -423,7 +422,8 @@ static int callback_broadcast(struct lws *wsi, enum lws_callback_reasons reason,
         break;
 
     case LWS_CALLBACK_CLOSED:
-    case LWS_CALLBACK_WSI_DESTROY:
+        if (pss == NULL || vhd == NULL)
+            break;
         --num_clients;
         lwsl_notice("Client disconnected.\n");
         /* remove our closing pss from the list of live pss */
@@ -432,43 +432,41 @@ static int callback_broadcast(struct lws *wsi, enum lws_callback_reasons reason,
         break;
 
     case LWS_CALLBACK_SERVER_WRITEABLE:
+    {
+        unsigned char out[LWS_PRE + sizeof(packet_data)];
 
         if (pss->publishing)
             break;
 
-        memcpy(&pwsbuffer[LWS_SEND_BUFFER_PRE_PADDING], (unsigned char *)&packet_data, sizeof(packet_data));
-        wsbuffer_len = sizeof(packet_data);
+        pthread_mutex_lock(&lock_packetdata);
+        memcpy(&out[LWS_PRE], &packet_data, sizeof(packet_data));
+        pthread_mutex_unlock(&lock_packetdata);
 
-        /* notice we allowed for LWS_PRE in the payload already */
-        m = lws_write(wsi, &pwsbuffer[LWS_SEND_BUFFER_PRE_PADDING], wsbuffer_len, LWS_WRITE_BINARY);
+        m = lws_write(wsi, &out[LWS_PRE], sizeof(packet_data), LWS_WRITE_BINARY);
         if (m < (int)sizeof(packet_data))
         {
             lwsl_err("ERROR %d writing to ws socket\n", m);
             return -1;
         }
         break;
+    }
 
     case LWS_CALLBACK_RECEIVE:
         /*
-		 * For test, our policy is ignore publishing when there are
-		 * no subscribers connected.
-		 */
-        if (!vhd->pss_list)
+         * For test, our policy is ignore publishing when there are
+         * no subscribers connected.
+         */
+        if (vhd == NULL || !vhd->pss_list)
             break;
 
-        if (len <= 0)
+        if (len == 0)
             break;
-        pthread_mutex_lock(&lock_established_conns);
-        /* Reply 0 on unknown request */
-        pwsbuffer[LWS_SEND_BUFFER_PRE_PADDING] = 0;
-        wsbuffer_len = 1;
         handle_client_request(in, len);
-        pthread_mutex_unlock(&lock_established_conns);
 
         /*
-		 * let every subscriber know we want to write something
-		 * on them as soon as they are ready
-		 */
+         * let every subscriber know we want to write something
+         * on them as soon as they are ready
+         */
         lws_start_foreach_llp(struct per_session_data **, ppss, vhd->pss_list)
         {
             if (!(*ppss)->publishing)
@@ -498,7 +496,7 @@ static struct lws_protocols protocols[] = {
     {"broadcast",
      callback_broadcast,
      sizeof(struct per_session_data),
-     WSBUFFERSIZE,
+     512,
      0, NULL, 0},
     {NULL, NULL, 0, 0, 0, NULL, 0} /* terminator */
 };
@@ -521,31 +519,17 @@ static int thread_to_core(int core_id)
 }
 
 /**
- * Incoming signal handler. Close server nice and clean.
+ * Incoming signal handler. Only flags the main loop, which shuts down cleanly.
  */
 static void sighandler(int sig)
 {
     NOTUSED(sig);
-    stop_recording();
-    stop_timer(packet_timer);
-    stop_timer(record_timer);
+    quit_requested = 1;
+}
 
-    finalize_timer();
-
-    pthread_mutex_unlock(&lock_packetdata_update);
-    gps_thread_exit = true;
-    pthread_join(gps_thread, NULL); /* Wait on GPS read thread exit */
-
-    serial_thread_exit = true;
-    pthread_join(serial_thread, NULL); /* Wait on serial read thread exit */
-    pthread_mutex_destroy(&lock_packetdata_update);
-
-    pthread_mutex_unlock(&lock_established_conns);
-    pthread_mutex_destroy(&lock_established_conns);
-    lws_cancel_service(context);
-    lws_context_destroy(context);
-
-    exit(EXIT_SUCCESS);
+static double finite_or_zero(double v)
+{
+    return isfinite(v) ? v : 0.0;
 }
 
 /**
@@ -556,55 +540,86 @@ static void *gps_read_thread(void *arg)
 {
     NOTUSED(arg);
     thread_to_core(2);
-    gpssource.server = (char *)"localhost";
-    gpssource.port = (char *)DEFAULT_GPSD_PORT;
-    gpssource.device = NULL;
+    bool connected = false;
+    bool warned = false;
 
-    if (gps_open(gpssource.server, gpssource.port, &gpsdata) != 0)
-    {
-        gps_available = false;
-        lwsl_err("No gpsd running or network error: %s\n", gps_errstr(errno));
-        pthread_exit(NULL);
-    }
-
-    unsigned int flags = WATCH_ENABLE;
-    if (gpssource.device != NULL)
-        flags |= WATCH_DEVICE;
-    gps_stream(&gpsdata, flags, gpssource.device);
-
-    lwsl_notice("GPS read thread started.");
+    lwsl_notice("GPS read thread started.\n");
     while (!gps_thread_exit)
     {
-        pthread_mutex_trylock(&lock_packetdata_update);
-        if (gps_available)
+        if (!connected)
         {
-            if (gps_waiting(&gpsdata, 500000))
+            if (gps_open("localhost", DEFAULT_GPSD_PORT, &gpsdata) != 0)
             {
-#if GPSD_API_MAJOR_VERSION < 9
-                if (gps_read(&gpsdata) == -1)
-#else
-                if (gps_read(&gpsdata, NULL, 0) == -1)
-#endif
-                {
-                    lwsl_err("GPS read error.\n");
-                }
-                // Calculate difference between local and GPS time
-                // Done here to avoid any latency caused by LWS
-#if GPSD_API_MAJOR_VERSION < 9
-                ts_gps.tv_sec = (long int)gpsdata.fix.time;
-#else
-                ts_gps = gpsdata.fix.time;
-#endif
-                (void)clock_gettime(CLOCK_REALTIME, &ts_now);
-                TS_SUB(&ts_diff, &ts_now, &ts_gps);
+                if (!warned)
+                    lwsl_err("No gpsd running or network error: %s\n", gps_errstr(errno));
+                warned = true;
+                sleep(1);
+                continue;
             }
+            gps_stream(&gpsdata, WATCH_ENABLE, NULL);
+            connected = true;
+            warned = false;
         }
-        pthread_mutex_unlock(&lock_packetdata_update);
+
+        if (!gps_waiting(&gpsdata, 500000))
+            continue;
+
+#if GPSD_API_MAJOR_VERSION < 9
+        if (gps_read(&gpsdata) == -1)
+#else
+        if (gps_read(&gpsdata, NULL, 0) == -1)
+#endif
+        {
+            lwsl_err("GPS read error.\n");
+            gps_close(&gpsdata);
+            connected = false;
+            sleep(1);
+            continue;
+        }
+
+        pthread_mutex_lock(&lock_packetdata);
+#if GPSD_API_MAJOR_VERSION < 10
+        packet_data.gps_status = (unsigned char)gpsdata.status;
+#else
+        packet_data.gps_status = (unsigned char)gpsdata.fix.status;
+#endif
+        packet_data.gps_mode = (unsigned char)gpsdata.fix.mode;
+        packet_data.gps_satellites_visible = (unsigned char)gpsdata.satellites_visible;
+        packet_data.gps_satellites_used = (unsigned char)gpsdata.satellites_used;
+        packet_data.gps_hdop = finite_or_zero(gpsdata.dop.hdop);
+        packet_data.gps_pdop = finite_or_zero(gpsdata.dop.pdop);
+        packet_data.gps_lat = finite_or_zero(gpsdata.fix.latitude);
+        packet_data.gps_lon = finite_or_zero(gpsdata.fix.longitude);
+#if GPSD_API_MAJOR_VERSION < 9
+        packet_data.gps_alt_msl = finite_or_zero(gpsdata.fix.altitude) * METERS_TO_FEET;
+        packet_data.gps_time = finite_or_zero(gpsdata.fix.time);
+#else
+        packet_data.gps_alt_msl = finite_or_zero(gpsdata.fix.altMSL) * METERS_TO_FEET;
+        packet_data.gps_time = (double)gpsdata.fix.time.tv_sec;
+#endif
+        pthread_mutex_unlock(&lock_packetdata);
     }
 
-    gps_close(&gpsdata);
-    pthread_mutex_unlock(&lock_packetdata_update);
-    pthread_exit(NULL);
+    if (connected)
+        gps_close(&gpsdata);
+    return NULL;
+}
+
+/**
+ * Reopen the serial port after a read error, e.g. unplugged adapter.
+ */
+static void reopen_serial(void)
+{
+    close_serial();
+    while (!serial_thread_exit)
+    {
+        usleep(500000);
+        if (open_serial() == EXIT_SUCCESS)
+        {
+            lwsl_notice("Serial device reopened.\n");
+            return;
+        }
+    }
 }
 
 /**
@@ -614,211 +629,137 @@ static void *serial_read_thread(void *arg)
 {
     NOTUSED(arg);
     thread_to_core(3);
-    lwsl_notice("Serial read thread started.");
-    if (open_serial() == EXIT_FAILURE)
-    {
-        lwsl_err("Serial device init failed\n");
-        serial_thread_exit = true;
-    };
+    lwsl_notice("Serial read thread started.\n");
+
+    t_average avg = {0};
+    t_mean mean;
     char *buf;
     ssize_t len = 0;
-    int items = 0;
-    double temperature;
-    double temperature_mean = 0.0;
-    double pressure;
-    double windspeed;
-    double windspeed_mean = 0.0;
-    double qfe;
-    double qnh;
-    unsigned short wind_direction;
-    double wind_direction_mean = 0.0;
-    unsigned char hour;
-    unsigned char min;
-    unsigned char sec;
-    unsigned char humidity;
-    double humidity_mean = 0.0;
-    signed short difference;
-    double cross_wind;
-    double head_wind;
-    double cross_wind_mean = 0.0;
-    double head_wind_mean = 0.0;
-    double wind_comp1;
-    double wind_comp2;
 
     while (!serial_thread_exit)
     {
+        if (atomic_exchange(&sync_requested, false))
+            sync_maws_time();
+
         buf = read_serial(&len);
-        if (len > 0)
+        if (len < 0)
         {
-            items = sscanf(buf, "%lf\t%hhu\t%lf\t%lf\t%hu\t%hhu\t%hhu\t%hhu", &temperature, &humidity, &pressure, &windspeed, &wind_direction, &hour, &min, &sec);
-            if (items == 8)
-            {
-                difference = wind_direction - runway_heading;
-                cross_wind = windspeed * sin(difference * DEG_2_RAD);
-                head_wind = windspeed * cos(difference * DEG_2_RAD);
-                wind_comp1 = windspeed * sin(wind_direction * DEG_2_RAD);
-                wind_comp2 = windspeed * cos(wind_direction * DEG_2_RAD);
-
-                // Fill arrays before we calculate average
-                if (moving_avg_index < MOVING_AVG_LENGTH)
-                {
-                    temperature_arr[moving_avg_index] = temperature;
-                    humidity_arr[moving_avg_index] = humidity;
-                    windspeed_arr[moving_avg_index] = windspeed;
-                    wind_direction_arr[moving_avg_index] = wind_direction;
-                    cross_wind_arr[moving_avg_index] = cross_wind;
-                    head_wind_arr[moving_avg_index] = head_wind;
-                    wind_comp1_arr[moving_avg_index] = wind_comp1;
-                    wind_comp2_arr[moving_avg_index] = wind_comp2;
-                    moving_avg_index += 1;
-                }
-                else
-                {
-                    // Left shift all arrays
-                    memmove(&temperature_arr[0], &temperature_arr[1], (MOVING_AVG_LENGTH - 1) * sizeof(double));
-                    memmove(&humidity_arr[0], &humidity_arr[1], (MOVING_AVG_LENGTH - 1) * sizeof(unsigned char));
-                    memmove(&windspeed_arr[0], &windspeed_arr[1], (MOVING_AVG_LENGTH - 1) * sizeof(double));
-                    memmove(&wind_direction_arr[0], &wind_direction_arr[1], (MOVING_AVG_LENGTH - 1) * sizeof(unsigned short));
-                    memmove(&cross_wind_arr[0], &cross_wind_arr[1], (MOVING_AVG_LENGTH - 1) * sizeof(double));
-                    memmove(&head_wind_arr[0], &head_wind_arr[1], (MOVING_AVG_LENGTH - 1) * sizeof(double));
-                    memmove(&wind_comp1_arr[0], &wind_comp1_arr[1], (MOVING_AVG_LENGTH - 1) * sizeof(double));
-                    memmove(&wind_comp2_arr[0], &wind_comp2_arr[1], (MOVING_AVG_LENGTH - 1) * sizeof(double));
-                    // Add new value at the end
-                    temperature_arr[MOVING_AVG_LENGTH - 1] = temperature;
-                    humidity_arr[MOVING_AVG_LENGTH - 1] = humidity;
-                    windspeed_arr[MOVING_AVG_LENGTH - 1] = windspeed;
-                    wind_direction_arr[MOVING_AVG_LENGTH - 1] = wind_direction;
-                    cross_wind_arr[MOVING_AVG_LENGTH - 1] = cross_wind;
-                    head_wind_arr[MOVING_AVG_LENGTH - 1] = head_wind;
-                    wind_comp1_arr[MOVING_AVG_LENGTH - 1] = wind_comp1;
-                    wind_comp2_arr[MOVING_AVG_LENGTH - 1] = wind_comp2;
-                    // Calculate average
-                    for (int i = 0; i < MOVING_AVG_LENGTH; i++)
-                    {
-                        temperature_mean += temperature_arr[i];
-                        humidity_mean += humidity_arr[i];
-                        windspeed_mean += windspeed_arr[i];
-                        cross_wind_mean += cross_wind_arr[i];
-                        head_wind_mean += head_wind_arr[i];
-                        wind_comp1 += wind_comp1_arr[i];
-                        wind_comp2 += wind_comp2_arr[i];
-                    }
-
-                    temperature_mean /= (double)MOVING_AVG_LENGTH;
-                    humidity_mean /= (double)MOVING_AVG_LENGTH;
-                    windspeed_mean /= (double)MOVING_AVG_LENGTH;
-                    cross_wind_mean /= (double)MOVING_AVG_LENGTH;
-                    head_wind_mean /= (double)MOVING_AVG_LENGTH;
-                    wind_comp1 /= (double)MOVING_AVG_LENGTH;
-                    wind_comp2 /= (double)MOVING_AVG_LENGTH;
-
-                    wind_direction_mean = atan2(wind_comp1, wind_comp2) * RAD_2_DEG;
-                    if (wind_direction_mean < 0.0)
-                    {
-                        wind_direction_mean = 360.0 + wind_direction_mean;
-                    }
-                }
-
-                double elev = runway_elevation * 0.3048;
-                qfe = pressure * (1.0 + ((height_qfe * EARTH_G) / (R * (temperature + 273.15))));
-                qnh = qfe * exp((elev * EARTH_G) / (R * (TREF + (ALPHA * elev) / 2.0)));
-
-                // Block mutex only minimum time
-                pthread_mutex_trylock(&lock_packetdata_update);
-                packet_data.baro_qfe = qfe;
-                packet_data.baro_qnh = qnh;
-                packet_data.temperature = temperature_mean;
-                packet_data.humidity = humidity_mean;
-                packet_data.wind_direction = wind_direction;
-                packet_data.wind_direction_mean = (unsigned short)wind_direction_mean;
-                packet_data.windspeed = windspeed;
-                packet_data.windspeed_mean = windspeed_mean;
-                packet_data.cross_windspeed = (double)cross_wind;
-                packet_data.cross_windspeed_mean = (double)cross_wind_mean;
-                packet_data.head_windspeed = (double)head_wind_mean;
-                packet_data.baro_pressure = pressure;
-                packet_data.maws_hour = hour;
-                packet_data.maws_min = min;
-                packet_data.maws_sec = sec;
-                pthread_mutex_unlock(&lock_packetdata_update);
-            }
+            lwsl_err("Error from read: %ld: %s\n", (long)len, strerror(errno));
+            reopen_serial();
+            continue;
         }
-        else if (len < 0)
+        if (len == 0)
         {
-            lwsl_err("Error from read: %ld: %s\n", len, strerror(errno));
+            usleep(10000);
+            continue;
         }
+
+        double temperature, pressure, windspeed;
+        unsigned short wind_direction;
+        unsigned char hour, min, sec, humidity;
+        int items = sscanf(buf, "%lf\t%hhu\t%lf\t%lf\t%hu\t%hhu\t%hhu\t%hhu", &temperature, &humidity, &pressure, &windspeed, &wind_direction, &hour, &min, &sec);
+        if (items != 8)
+            continue;
+
+        pthread_mutex_lock(&lock_packetdata);
+        unsigned short runway_heading = packet_data.runway_heading;
+        unsigned short runway_elevation = packet_data.runway_elevation;
+        pthread_mutex_unlock(&lock_packetdata);
+
+        int difference = (int)wind_direction - (int)runway_heading;
+        t_sample sample = {
+            .temperature = temperature,
+            .humidity = humidity,
+            .windspeed = windspeed,
+            .cross_wind = windspeed * sin(difference * DEG_2_RAD),
+            .head_wind = windspeed * cos(difference * DEG_2_RAD),
+            .wind_comp1 = windspeed * sin(wind_direction * DEG_2_RAD),
+            .wind_comp2 = windspeed * cos(wind_direction * DEG_2_RAD)};
+        average_add(&avg, &sample);
+        average_get(&avg, &mean);
+
+        double elev = runway_elevation * 0.3048;
+        double qfe = pressure * (1.0 + ((height_qfe * EARTH_G) / (R * (temperature + 273.15))));
+        double qnh = qfe * exp((elev * EARTH_G) / (R * (TREF + (ALPHA * elev) / 2.0)));
+
+        pthread_mutex_lock(&lock_packetdata);
+        packet_data.baro_qfe = qfe;
+        packet_data.baro_qnh = qnh;
+        packet_data.temperature = mean.temperature;
+        packet_data.humidity = (unsigned char)(mean.humidity + 0.5);
+        packet_data.wind_direction = wind_direction;
+        packet_data.wind_direction_mean = (unsigned short)mean.direction;
+        packet_data.windspeed = windspeed;
+        packet_data.windspeed_mean = mean.windspeed;
+        packet_data.cross_windspeed = sample.cross_wind; // Instantaneous, as shown by the client
+        packet_data.cross_windspeed_mean = mean.cross_wind;
+        packet_data.head_windspeed = mean.head_wind; // Mean, as shown by the client
+        packet_data.baro_pressure = pressure;
+        packet_data.maws_hour = hour;
+        packet_data.maws_min = min;
+        packet_data.maws_sec = sec;
+        pthread_mutex_unlock(&lock_packetdata);
     }
 
     close_serial();
-    pthread_mutex_unlock(&lock_packetdata_update);
-    pthread_exit(NULL);
+    return NULL;
 }
 
 /**
- * Callback function for packet timer.
- * Send packet data periodically to clients.
+ * Packet timer, runs on the lws service thread.
+ * Triggers sending of the packet data to all clients.
  */
-static void packet_timer_handler(size_t timer_id, void *user_data)
+static void packet_timer_cb(lws_sorted_usec_list_t *sul)
 {
-    NOTUSED(timer_id);
-    NOTUSED(user_data);
-    // Block gpsdata only a minimum time
-    pthread_mutex_trylock(&lock_packetdata_update);
-    packet_data.gps_status = (unsigned char)gpsdata.status;
-    packet_data.gps_mode = (unsigned char)gpsdata.fix.mode;
-    packet_data.gps_satellites_visible = (unsigned char)gpsdata.satellites_visible;
-    packet_data.gps_satellites_used = (unsigned char)gpsdata.satellites_used;
-    packet_data.gps_hdop = gpsdata.dop.hdop;
-    packet_data.gps_pdop = gpsdata.dop.pdop;
-    packet_data.gps_lat = gpsdata.fix.latitude;
-    packet_data.gps_lon = gpsdata.fix.longitude;
-#if GPSD_API_MAJOR_VERSION < 9
-    packet_data.gps_alt_msl = gpsdata.fix.altitude * METERS_TO_FEET;
-    packet_data.gps_time = gpsdata.fix.time;
-#else
-    packet_data.gps_alt_msl = gpsdata.fix.altMSL * METERS_TO_FEET;
-    packet_data.gps_time = (double)gpsdata.fix.time.tv_sec;
-#endif
-    packet_data.runway_elevation = runway_elevation;
-    packet_data.runway_heading = runway_heading;
-    pthread_mutex_unlock(&lock_packetdata_update);
-
+    lws_sul_schedule(context, 0, sul, packet_timer_cb, PACKET_INTERVAL_US);
     lws_callback_on_writable_all_protocol(context, &protocols[1]);
 }
 
 /**
- * Callback function for record timer.
+ * Record timer, runs on the lws service thread.
  * Log data packet into file if record is active.
  */
-static void record_timer_handler(size_t timer_id, void *user_data)
+static void record_timer_cb(lws_sorted_usec_list_t *sul)
 {
-    NOTUSED(timer_id);
-    NOTUSED(user_data);
-    time_t now = time(NULL);
-    struct tm *t = localtime(&now);
+    struct timespec ts;
+    struct tm t;
+    t_packet_data p;
 
-    if (record_fp != NULL && packet_data.record_status != 0)
-    {
-        pthread_mutex_trylock(&lock_packetdata_update);
-        fprintf(record_fp, "%02u:%02u:%02u;%0.1f;%u;%0.1f;%u;%0.1f;%0.1f;%0.1f;%0.1f;%.0f;%02u:%02u:%02u;%u\n",
-                t->tm_hour,
-                t->tm_min,
-                t->tm_sec,
-                packet_data.temperature,
-                packet_data.humidity,
-                packet_data.baro_pressure,
-                packet_data.wind_direction,
-                fabs(packet_data.windspeed),
-                fabs(packet_data.cross_windspeed),
-                fabs(packet_data.windspeed_mean),
-                fabs(packet_data.cross_windspeed_mean),
-                packet_data.gps_time,
-                packet_data.maws_hour,
-                packet_data.maws_min,
-                packet_data.maws_sec,
-                packet_data.top_number);
-        pthread_mutex_unlock(&lock_packetdata_update);
-    }
+    clock_gettime(CLOCK_REALTIME, &ts);
+    // Fire just after the next full second so rows do not skip or repeat a second
+    lws_sul_schedule(context, 0, sul, record_timer_cb, RECORD_INTERVAL_US - ts.tv_nsec / 1000 + 1000);
+
+    if (record_fp == NULL)
+        return;
+
+    time_t now = ts.tv_sec;
+    localtime_r(&now, &t);
+
+    pthread_mutex_lock(&lock_packetdata);
+    p = packet_data;
+    pthread_mutex_unlock(&lock_packetdata);
+
+    if (p.record_status == 0)
+        return;
+
+    fprintf(record_fp, "%02u:%02u:%02u;%0.1f;%u;%0.1f;%u;%0.1f;%0.1f;%0.1f;%0.1f;%.0f;%02u:%02u:%02u;%u\n",
+            t.tm_hour,
+            t.tm_min,
+            t.tm_sec,
+            p.temperature,
+            (unsigned)p.humidity,
+            p.baro_pressure,
+            (unsigned)p.wind_direction,
+            fabs(p.windspeed),
+            fabs(p.cross_windspeed),
+            fabs(p.windspeed_mean),
+            fabs(p.cross_windspeed_mean),
+            p.gps_time,
+            (unsigned)p.maws_hour,
+            (unsigned)p.maws_min,
+            (unsigned)p.maws_sec,
+            (unsigned)p.top_number);
+    fflush(record_fp);
 }
 
 /**
@@ -826,9 +767,13 @@ static void record_timer_handler(size_t timer_id, void *user_data)
  */
 int main(int argc, char **argv)
 {
+    int status = EXIT_SUCCESS;
+    bool serial_started = false;
+    bool gps_started = false;
+
     memset(&packet_data, 0, sizeof(packet_data));
-    packet_data.runway_elevation = runway_elevation;
-    packet_data.runway_heading = runway_heading;
+    packet_data.runway_elevation = 1204; // Elevation[ft](Manching)
+    packet_data.runway_heading = 248;    // Runway heading[deg](Manching)
     packet_data.barometer_height = height_qfe;
     packet_data.baro_qfe = 1013.25;
     packet_data.baro_qnh = 1013.25;
@@ -843,10 +788,7 @@ int main(int argc, char **argv)
      */
     memset(&info, 0, sizeof(info));
     info.port = 8080;
-    info.iface = "127.0.0.1";
     info.protocols = protocols;
-    info.gid = -1;
-    info.uid = -1;
     info.max_http_header_pool = 16;
     info.options = 0;
     info.extensions = NULL;
@@ -884,8 +826,6 @@ int main(int argc, char **argv)
     info.iface = iface;
     info.gid = gid;
     info.uid = uid;
-    info.max_http_header_pool = 16;
-    info.timeout_secs = 5;
 
     /* Create libwebsocket context representing this server */
     context = lws_create_context(&info);
@@ -896,41 +836,71 @@ int main(int argc, char **argv)
         return EXIT_FAILURE;
     }
 
+    /* Exit with failure if there is no weather station, so systemd restarts us. */
+    if (open_serial() == EXIT_FAILURE)
+    {
+        lwsl_err("Serial device init failed\n");
+        lws_context_destroy(context);
+        return EXIT_FAILURE;
+    }
+
+    if (!gps_available)
+        lwsl_notice("GPS disabled.\n");
+
+    /* Reader threads must not take the termination signals, the main thread does. */
+    sigset_t sigs, old_sigs;
+    sigemptyset(&sigs);
+    sigaddset(&sigs, SIGINT);
+    sigaddset(&sigs, SIGTERM);
+    sigaddset(&sigs, SIGQUIT);
+    pthread_sigmask(SIG_BLOCK, &sigs, &old_sigs);
+
     /* Start reading serial data from weather station */
-    pthread_create(&serial_thread, NULL, serial_read_thread, NULL);
+    if (pthread_create(&serial_thread, NULL, serial_read_thread, NULL) == 0)
+    {
+        serial_started = true;
+    }
+    else
+    {
+        lwsl_err("Cannot start serial thread\n");
+        status = EXIT_FAILURE;
+    }
 
     /* Initialize GPS data so we read back zero if no GPS is available */
     memset(&gpsdata, 0, sizeof(gpsdata));
-    if (gps_available)
+    if (status == EXIT_SUCCESS && gps_available)
     {
-        /* Start reading GPS data */
-        pthread_create(&gps_thread, NULL, gps_read_thread, NULL);
+        if (pthread_create(&gps_thread, NULL, gps_read_thread, NULL) == 0)
+            gps_started = true;
+        else
+            lwsl_err("Cannot start GPS thread\n");
+    }
+    pthread_sigmask(SIG_SETMASK, &old_sigs, NULL);
+
+    if (status == EXIT_SUCCESS)
+    {
+        packet_timer_cb(&packet_sul);
+        record_timer_cb(&record_sul);
+
+        // Run until SIGINT/SIGTERM (CTRL+C), the signal interrupts the wait
+        while (!quit_requested)
+        {
+            lws_service(context, 100);
+        }
     }
 
-    initialize_timer();
-    packet_timer = start_timer(500, packet_timer_handler, TIMER_PERIODIC, NULL);
-    record_timer = start_timer(1000, record_timer_handler, TIMER_PERIODIC, NULL);
+    lws_sul_cancel(&packet_sul);
+    lws_sul_cancel(&record_sul);
+    stop_recording();
 
-    // Check if serial thread is running.
-    // Exit if not, e.g. serial interface not open.
-    if (serial_thread_exit)
-    {
-        sighandler(0);
-    }
+    gps_thread_exit = true;
+    serial_thread_exit = true;
+    if (gps_started)
+        pthread_join(gps_thread, NULL);
+    if (serial_started)
+        pthread_join(serial_thread, NULL);
+    close_serial();
 
-    // Infinite loop, to end this server send SIGTERM. (CTRL+C) */
-    for (;;)
-    {
-        lws_service(context, 100);
-        /* libwebsocket_service will process all waiting events with
-         * their callback functions and then wait 100 ms.
-         * (This is a single threaded web server and this will keep our
-         * server from generating load while there are not
-         * requests to process)
-         */
-    }
-
-    sighandler(0);
-
-    return EXIT_SUCCESS;
+    lws_context_destroy(context);
+    return status;
 }

@@ -92,12 +92,7 @@ int open_serial(void)
     {
         fprintf(stderr, "Failed to open serial device %s: %s\n",
                 serial_interface, strerror(errno));
-        return (EXIT_FAILURE);
-    }
-
-    if (tcgetattr(serial_fd, &tios) < 0)
-    {
-        fprintf(stderr, "tcgetattr(%s): %s\n", serial_interface, strerror(errno));
+        serial_fd = -1;
         return (EXIT_FAILURE);
     }
 
@@ -113,6 +108,7 @@ int open_serial(void)
     {
         fprintf(stderr, "Serial cfsetispeed(%s): %s\n",
                 serial_interface, strerror(errno));
+        close_serial();
         return (EXIT_FAILURE);
     }
 
@@ -120,6 +116,7 @@ int open_serial(void)
     {
         fprintf(stderr, "Serial cfsetospeed(%s): %s\n",
                 serial_interface, strerror(errno));
+        close_serial();
         return (EXIT_FAILURE);
     }
 
@@ -129,43 +126,43 @@ int open_serial(void)
     {
         fprintf(stderr, "Serial tcsetattr(%s): %s\n",
                 serial_interface, strerror(errno));
+        close_serial();
         return (EXIT_FAILURE);
     }
-
-    // Kick on handshake and start reception
-    //int RTSDTR_flag = TIOCM_RTS | TIOCM_DTR;
-    //ioctl(Modes.beast_fd, TIOCMBIS, &RTSDTR_flag); //Set RTS&DTR pin
 
     return EXIT_SUCCESS;
 }
 
 void close_serial(void)
 {
-    close(serial_fd);
+    if (serial_fd != -1)
+    {
+        close(serial_fd);
+        serial_fd = -1;
+    }
 }
 
 char *read_serial(ssize_t *len)
 {
-    if (serial_fd != -1)
-    {
-        *len = read(serial_fd, serial_buffer, sizeof(serial_buffer) - 1);
-        return serial_buffer;
-    }
-    else
+    if (serial_fd == -1)
     {
         *len = -1;
         return NULL;
     }
+
+    ssize_t n = read(serial_fd, serial_buffer, sizeof(serial_buffer) - 1);
+    if (n < 0 && errno == EINTR)
+        n = 0; // Interrupted by a signal, caller re-checks its exit flag
+    if (n >= 0)
+        serial_buffer[n] = '\0';
+    *len = n;
+    return serial_buffer;
 }
 
 ssize_t write_serial(const char *buf, size_t len)
 {
-    if (serial_fd != -1)
-    {
-        return write(serial_fd, buf, len);
-    }
-    else
-    {
+    if (serial_fd == -1)
         return -1;
-    }
+
+    return write(serial_fd, buf, len);
 }
