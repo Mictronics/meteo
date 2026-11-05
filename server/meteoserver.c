@@ -689,7 +689,7 @@ static void *serial_read_thread(void *arg)
         packet_data.temperature = mean.temperature;
         packet_data.humidity = (unsigned char)(mean.humidity + 0.5);
         packet_data.wind_direction = wind_direction;
-        packet_data.wind_direction_mean = (unsigned short)mean.direction;
+        packet_data.wind_direction_mean = (unsigned short)((int)lround(mean.direction) % 360);
         packet_data.windspeed = windspeed;
         packet_data.windspeed_mean = mean.windspeed;
         packet_data.cross_windspeed = sample.cross_wind; // Instantaneous, as shown by the client
