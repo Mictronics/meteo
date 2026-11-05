@@ -12,7 +12,7 @@ WebMeteo visualizes data from a Vaisala weather station (MAWS) for EASA acoustic
 - Test: `make test` builds and runs `server/test_average.c`, the moving-average self-check. It needs no external libraries, so it also runs where gpsd headers are missing.
 - Debian package: `dpkg-buildpackage -b -uc`
 - Release: commit everything, then `make release V=X.Y.Z` (semver). It edits `debian/changelog` and `package.json`, commits and creates the annotated tag `vX.Y.Z`, without pushing.
-- Lint client: `npm run lint` (eslint, airbnb config, `client/` only)
+- Lint client: `npm run lint` (eslint recommended rules, `client/` only, vendored libs ignored)
 - Run: `server/meteoserver -p10024 [--serial /dev/ttyUSB0] [--baudrate 9600] [--no-gps] [-d level]`. See `server/help.h` for all options.
 - The only automated test is the moving-average self-check above; the rest is checked by hand. `server/vaisalla_log.txt` is a sample of raw serial output, usable to feed a fake serial port.
 

@@ -10,20 +10,15 @@
   "license": "GPL-v3.0-or-later",
   "private": true,
   "engines": {
-    "node": ">= 13.5.0",
+    "node": ">= 20.19.0",
     "npm": ">= 6.14.0"
   },
   "main": "./client/index.html",
   "devDependencies": {
-    "eslint": "^7.22.0",
-    "eslint-config-airbnb": "^18.2.1",
-    "eslint-config-airbnb-base": "^14.2.1",
-    "eslint-plugin-import": "^2.22.1",
-    "eslint-plugin-jsx-a11y": "^6.4.1",
-    "eslint-plugin-react": "^7.22.0",
-    "eslint-plugin-react-hooks": "^4.2.0"
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.14.0"
   },
   "scripts": {
-    "lint": "eslint --ext .js client"
+    "lint": "eslint client"
   }
 }
