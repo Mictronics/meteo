@@ -15,11 +15,14 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+const MAX_ELEVATION_FT = 29030;
+
 let flightNumber = -1;
 let topNumber = -1;
 let recordStatus = -1;
 let runwayHeading = -1;
 let runwayElevation = -1;
+let hsiHeadingPending = false;
 
 // Create worker thread for server communication.
 const serverCommunicationWorker = new Worker('./scripts/communication.worker.js');
@@ -47,35 +50,53 @@ const gpsMode = [
   '3D' // 3 good for altitude/climb too
 ];
 
+// Look up each DOM element only once.
+const elementCache = {};
+function $(id) {
+  if (!elementCache[id]) {
+    elementCache[id] = document.getElementById(id);
+  }
+  return elementCache[id];
+}
+
+function pad2(n) {
+  return n.toString(10).padStart(2, '0');
+}
+
+// Root element of the HSI SVG, null as long as the SVG is not loaded.
+function getHsi() {
+  const doc = $('hsiObject').contentDocument;
+  return doc ? doc.children[0] : null;
+}
+
 // Update local time indication periodically
 function UpdateGui(serverData) {
-  // GPS time and date
-  let d = new Date(0);
-  d.setUTCSeconds(serverData.gpsTime);
+  // GPS time, MAWS runs on UTC as well
+  const hasGpsTime = serverData.gpsTime > 0;
+  const gpsDate = new Date(serverData.gpsTime * 1000);
+  const timeGPS = hasGpsTime
+    ? `${pad2(gpsDate.getUTCHours())}:${pad2(gpsDate.getUTCMinutes())}:${pad2(gpsDate.getUTCSeconds())}`
+    : '--:--:--';
 
-  const timeGPS = `${d.getUTCHours().toString(10).padStart(2, '0')}:${d
-    .getUTCMinutes()
-    .toString(10)
-    .padStart(2, '0')}:${d.getUTCSeconds().toString(10).padStart(2, '0')}`;
-
-  // Get MAWS time
-  d = new Date(
-    d.getUTCFullYear(),
-    d.getUTCMonth(),
-    d.getDate(),
-    serverData.maws_hour,
-    serverData.maws_minute,
-    serverData.maws_second,
-    0
+  // MAWS time with the date taken from GPS
+  const mawsDate = new Date(
+    Date.UTC(
+      hasGpsTime ? gpsDate.getUTCFullYear() : 1970,
+      hasGpsTime ? gpsDate.getUTCMonth() : 0,
+      hasGpsTime ? gpsDate.getUTCDate() : 1,
+      serverData.maws_hour,
+      serverData.maws_minute,
+      serverData.maws_second
+    )
   );
-  const timeLocal = d.toLocaleTimeString();
+  const timeMaws = mawsDate.toLocaleTimeString(undefined, { timeZone: 'UTC' });
 
-  document.getElementById('localDate').innerHTML = d.toLocaleDateString();
-  document.getElementById('localTime').innerHTML = `${timeLocal} / ${timeGPS}`;
+  $('localDate').textContent = hasGpsTime ? mawsDate.toLocaleDateString(undefined, { timeZone: 'UTC' }) : '--.--.----';
+  $('localTime').textContent = `${timeMaws} / ${timeGPS}`;
 
   // Flight and top number
-  const fn = document.getElementById('flightNumberInput');
-  const tn = document.getElementById('topNumberInput');
+  const fn = $('flightNumberInput');
+  const tn = $('topNumberInput');
   if (flightNumber < 0) {
     fn.value = serverData.flightNumber;
     flightNumber = serverData.flightNumber;
@@ -102,40 +123,52 @@ function UpdateGui(serverData) {
   if (recordStatus === 0) {
     fn.disabled = false;
     tn.disabled = false;
-    document.getElementById('recordSpinner').classList.add('d-none');
+    $('recordSpinner').classList.add('d-none');
   } else {
     fn.disabled = true;
     tn.disabled = true;
-    document.getElementById('recordSpinner').classList.remove('d-none');
+    $('recordSpinner').classList.remove('d-none');
   }
 
   // Runway heading and elevation
   if (runwayElevation !== serverData.runwayElevation) {
     runwayElevation = serverData.runwayElevation;
-    document.getElementById('elevationInput').value = runwayElevation.toFixed(0);
+    $('elevationInput').value = runwayElevation.toFixed(0);
   }
 
-  const hsiObject = document.getElementById('hsiObject').contentDocument.children[0];
   if (runwayHeading !== serverData.runwayHeading) {
     runwayHeading = serverData.runwayHeading;
-    document.getElementById('runwayHeadingInput').value = runwayHeading.toFixed(0);
-    hsiObject.getElementById(
-      'aircraftSymbol'
-    ).attributes.transform.value = `matrix(1,0,0,1,70,70) rotate(${serverData.runwayHeading},0,0) scale(1.5)`;
+    $('runwayHeadingInput').value = runwayHeading.toFixed(0);
+    hsiHeadingPending = true;
+  }
+
+  // The SVG may still be loading when the first data arrives
+  const hsi = getHsi();
+  if (hsi !== null) {
+    if (hsiHeadingPending) {
+      hsi
+        .getElementById('aircraftSymbol')
+        .setAttribute('transform', `matrix(1,0,0,1,70,70) rotate(${serverData.runwayHeading},0,0) scale(1.5)`);
+      hsiHeadingPending = false;
+    }
+    hsi
+      .getElementById('windArrow')
+      .setAttribute('transform', `matrix(1,0,0,1,70,70) rotate(${serverData.windDirection},0,0)`);
+    hsi
+      .getElementById('meanWindArrow')
+      .setAttribute('transform', `matrix(1,0,0,1,70,70) rotate(${serverData.windDirectionMean},0,0)`);
   }
 
   // GPS Information
-  document.getElementById('gpsLat').innerHTML = `${serverData.gpsLat.toFixed(6)}°`;
-  document.getElementById('gpsLon').innerHTML = `${serverData.gpsLon.toFixed(6)}°`;
-  document.getElementById('gpsAltMsl').innerHTML = `${serverData.gpsAltMsl.toFixed(1)}`;
-  document.getElementById(
-    'gpsSatellites'
-  ).innerHTML = `${serverData.gpsSatellitesUsed}/${serverData.gpsSatellitesVisible}`;
-  document.getElementById('gpsStatus').innerHTML = `${gpsMode[serverData.gpsMode]} ${gpsStatus[serverData.gpsStatus]}`;
-  document.getElementById('gpsDOP').innerHTML = `${serverData.gpsPDOP.toFixed(1)}/${serverData.gpsHDOP.toFixed(1)}`;
+  $('gpsLat').textContent = `${serverData.gpsLat.toFixed(6)}°`;
+  $('gpsLon').textContent = `${serverData.gpsLon.toFixed(6)}°`;
+  $('gpsAltMsl').textContent = `${serverData.gpsAltMsl.toFixed(1)}`;
+  $('gpsSatellites').textContent = `${serverData.gpsSatellitesUsed}/${serverData.gpsSatellitesVisible}`;
+  $('gpsStatus').textContent = `${gpsMode[serverData.gpsMode] || ''} ${gpsStatus[serverData.gpsStatus] || ''}`;
+  $('gpsDOP').textContent = `${serverData.gpsPDOP.toFixed(1)}/${serverData.gpsHDOP.toFixed(1)}`;
 
   // Time sync button only enabled when GPS time is valid
-  let btn = document.getElementById('timeSyncButton');
+  let btn = $('timeSyncButton');
   if (serverData.gpsMode > 1) {
     btn.classList.replace('btn-outline-light', 'btn-info');
     btn.classList.remove('disabled');
@@ -145,7 +178,7 @@ function UpdateGui(serverData) {
   }
 
   // From-To button status
-  btn = document.getElementById('fromToButton');
+  btn = $('fromToButton');
   if (serverData.fromToStatus) {
     btn.classList.replace('btn-secondary', 'btn-warning');
   } else {
@@ -153,38 +186,20 @@ function UpdateGui(serverData) {
   }
 
   // Weather information
-  document.getElementById('temperature').innerHTML = serverData.temperature.toFixed(1);
-  document.getElementById('humidity').innerHTML = serverData.humidity.toFixed(0);
-  document.getElementById('pressure').innerHTML = serverData.baroPressure.toFixed(1);
-  document.getElementById('qnh').innerHTML = `${serverData.QNH.toFixed(1)}`;
-  document.getElementById('qfe').innerHTML = `${serverData.QFE.toFixed(1)}`;
-  document.getElementById('windDirectionMean').innerHTML = `${serverData.windDirectionMean.toFixed(0)}`;
-  document.getElementById('windspeedMean').innerHTML = `${serverData.windspeedMean.toFixed(1)}`;
-  document.getElementById('windDirection').innerHTML = `${serverData.windDirection.toFixed(0)}`;
-  document.getElementById('windspeed').innerHTML = `${serverData.windspeed.toFixed(1)}`;
+  $('temperature').textContent = serverData.temperature.toFixed(1);
+  $('humidity').textContent = serverData.humidity.toFixed(0);
+  $('pressure').textContent = serverData.baroPressure.toFixed(1);
+  $('qnh').textContent = serverData.QNH.toFixed(1);
+  $('qfe').textContent = serverData.QFE.toFixed(1);
+  $('windDirectionMean').textContent = serverData.windDirectionMean.toFixed(0);
+  $('windspeedMean').textContent = serverData.windspeedMean.toFixed(1);
+  $('windDirection').textContent = serverData.windDirection.toFixed(0);
+  $('windspeed').textContent = serverData.windspeed.toFixed(1);
 
-  if (serverData.crossWindspeed < 0.0) {
-    document.getElementById('crossWindspeedLabel').innerHTML = 'Crosswind from left [kts]';
-    document.getElementById('crossWindspeed').innerHTML = `${Math.abs(serverData.crossWindspeed).toFixed(1)}`;
-  } else {
-    document.getElementById('crossWindspeedLabel').innerHTML = 'Crosswind from right [kts]';
-    document.getElementById('crossWindspeed').innerHTML = `${Math.abs(serverData.crossWindspeed).toFixed(1)}`;
-  }
-
-  if (serverData.headWindspeed < 0.0) {
-    document.getElementById('headWindspeedLabel').innerHTML = 'Tailwind [kts]';
-    document.getElementById('headWindspeed').innerHTML = `${Math.abs(serverData.headWindspeed).toFixed(1)}`;
-  } else {
-    document.getElementById('headWindspeedLabel').innerHTML = 'Headwind [kts]';
-    document.getElementById('headWindspeed').innerHTML = `${Math.abs(serverData.headWindspeed).toFixed(1)}`;
-  }
-
-  hsiObject.getElementById(
-    'windArrow'
-  ).attributes.transform.value = `matrix(1,0,0,1,70,70) rotate(${serverData.windDirection},0,0)`;
-  hsiObject.getElementById(
-    'meanWindArrow'
-  ).attributes.transform.value = `matrix(1,0,0,1,70,70) rotate(${serverData.windDirectionMean},0,0)`;
+  $('crossWindspeedLabel').textContent = serverData.crossWindspeed < 0.0 ? 'Crosswind from left [kts]' : 'Crosswind from right [kts]';
+  $('crossWindspeed').textContent = Math.abs(serverData.crossWindspeed).toFixed(1);
+  $('headWindspeedLabel').textContent = serverData.headWindspeed < 0.0 ? 'Tailwind [kts]' : 'Headwind [kts]';
+  $('headWindspeed').textContent = Math.abs(serverData.headWindspeed).toFixed(1);
 
   // Update charts
   windspeedChart.Update(Math.abs(serverData.windspeedMean), Math.abs(serverData.crossWindspeed));
@@ -194,11 +209,12 @@ function UpdateGui(serverData) {
 // Start/stop recording
 function OnRecordButtonClick(ev) {
   if (recordStatus === 0) {
+    const top = Number.parseInt($('topNumberInput').value, 10);
     serverCommunicationWorker.postMessage({
       cmd: 'start',
       data: {
-        flightNumber: Number.parseInt(document.getElementById('flightNumberInput').value, 10),
-        topNumber
+        flightNumber: Number.parseInt($('flightNumberInput').value, 10),
+        topNumber: Number.isNaN(top) ? topNumber : top
       }
     });
   } else {
@@ -217,9 +233,14 @@ function OnFromToButtonClick(ev) {
   });
 }
 
-// Forward elevation changes to server
+// Forward elevation changes to server, restore the last server value if the input is invalid
 function OnElevationInputChange(ev) {
-  const elevation = Number.parseInt(ev.target.value, 10);
+  const input = ev.target;
+  const elevation = Number.parseInt(input.value, 10);
+  if (!(elevation >= 0 && elevation <= MAX_ELEVATION_FT)) {
+    input.value = runwayElevation >= 0 ? runwayElevation : '';
+    return;
+  }
   serverCommunicationWorker.postMessage({
     cmd: 'elevation',
     data: {
@@ -228,9 +249,14 @@ function OnElevationInputChange(ev) {
   });
 }
 
-// Forward runway heading changes to server
+// Forward runway heading changes to server, restore the last server value if the input is invalid
 function OnRunwayHeadingInputChange(ev) {
-  const heading = Number.parseInt(ev.target.value, 10);
+  const input = ev.target;
+  const heading = Number.parseInt(input.value, 10);
+  if (!(heading >= 0 && heading <= 359)) {
+    input.value = runwayHeading >= 0 ? runwayHeading : '';
+    return;
+  }
   serverCommunicationWorker.postMessage({
     cmd: 'heading',
     data: {
@@ -272,7 +298,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showNoty('Weather station disconnected', 'error');
         break;
       case 'network':
-        document.getElementById('linkSpeed').innerHTML = `${msg.data}Mbps`;
+        $('linkSpeed').textContent = `${msg.data}Mbps`;
         break;
       case 'data':
         UpdateGui(msg.data);
@@ -283,11 +309,11 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   // Add event handlers
-  document.getElementById('recordButton').addEventListener('click', OnRecordButtonClick);
-  document.getElementById('fromToButton').addEventListener('click', OnFromToButtonClick);
-  document.getElementById('timeSyncButton').addEventListener('click', OnTimeSyncButtonClick);
-  document.getElementById('elevationInput').addEventListener('change', OnElevationInputChange);
-  document.getElementById('runwayHeadingInput').addEventListener('change', OnRunwayHeadingInputChange);
+  $('recordButton').addEventListener('click', OnRecordButtonClick);
+  $('fromToButton').addEventListener('click', OnFromToButtonClick);
+  $('timeSyncButton').addEventListener('click', OnTimeSyncButtonClick);
+  $('elevationInput').addEventListener('change', OnElevationInputChange);
+  $('runwayHeadingInput').addEventListener('change', OnRunwayHeadingInputChange);
 
   // Finally, connect to weather station
   serverCommunicationWorker.postMessage({

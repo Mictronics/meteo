@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta
       name="viewport"
-      content="user-scalable=no, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, minimal-ui"
+      content="width=device-width, initial-scale=1.0"
     />
     <title>WebMeteo Station</title>
     <meta name="description" content="Web meteo station for acoustic tests." />
@@ -14,11 +14,11 @@
     <link rel="stylesheet" type="text/css" href="./css/noty.css" />
     <link rel="stylesheet" type="text/css" href="./css/bootstrap-v4.css" />
     <link rel="stylesheet" type="text/css" href="./css/styles.css" />
-    <script type="text/javascript" src="./scripts/vendors/noty.min.js"></script>
-    <script type="text/javascript" src="./scripts/vendors/d3.min.js"></script>
-    <script type="text/javascript" src="./scripts/vendors/d3fc.js"></script>
-    <script type="text/javascript" src="./scripts/charts.js"></script>
-    <script type="text/javascript" src="./scripts/index.js"></script>
+    <script type="text/javascript" defer src="./scripts/vendors/noty.min.js"></script>
+    <script type="text/javascript" defer src="./scripts/vendors/d3.min.js"></script>
+    <script type="text/javascript" defer src="./scripts/vendors/d3fc.js"></script>
+    <script type="text/javascript" defer src="./scripts/charts.js"></script>
+    <script type="text/javascript" defer src="./scripts/index.js"></script>
   </head>
   <body class="m-1 h-100">
     <div class="d-flex flex-row flex-wrap justify-content-between">
@@ -30,7 +30,7 @@
           <div id="temperature" class="col-3 h5">---</div>
         </div>
         <div class="row">
-          <div class="col-5 text-black-50">Humitity [%]</div>
+          <div class="col-5 text-black-50">Humidity [%]</div>
           <div id="humidity" class="col-3 h5">---</div>
         </div>
         <div class="row">
@@ -46,7 +46,7 @@
           <div id="qnh" class="col-3 h5">---</div>
         </div>
         <div class="row">
-          <div class="col-5 text-black-50">Wind Direction [kts]</div>
+          <div class="col-5 text-black-50">Wind Direction [°]</div>
           <div id="windDirection" class="col-3 h5">---</div>
         </div>
         <div class="row">
@@ -204,7 +204,7 @@
         <a href="../download/" target="_blank" class="btn btn-info">Download</a>
       </div>
     </div>
-    <footer class="font-weight-lighter fix-bottom float-right">
+    <footer class="font-weight-lighter fixed-bottom float-right">
       WebMeteo v1.0, 2021 Michael Wolf
     </footer>
     <div id="noty" class="fixed-top m-1" style="max-width: fit-content"></div>

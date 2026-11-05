@@ -15,6 +15,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+// Time span shown in the windspeed chart
+const WINDSPEED_WINDOW_MS = 30000;
+
 class WindspeedChart {
   constructor(element, windspeed, crosswind) {
     // DOM element id where chart is plotted in
@@ -86,13 +89,14 @@ class WindspeedChart {
 
   // Update windspeed chart with new value
   Update(windspeed, crosswind) {
+    const now = new Date();
     this.windSpeedData.push({
-      date: new Date(),
+      date: now,
       speed: windspeed,
       cross: crosswind
     });
-    // Keep only last 60s of windspeed data
-    if (this.windSpeedData.length > 60) {
+    // Keep only the last WINDSPEED_WINDOW_MS of data
+    while (this.windSpeedData.length > 1 && now - this.windSpeedData[0].date > WINDSPEED_WINDOW_MS) {
       this.windSpeedData.shift();
     }
 
@@ -192,11 +196,10 @@ class HumidityChart {
       [28, 21.44779],
       [29, 20.70262],
       [30, 20],
-      [30, 20],
       [35, 20],
       [35, 95],
       [-4, 95],
-      [-4, 82.61796]
+      [-4, 82.617969]
     ];
     // Temperature/humidity as point indicator
     this.pointHumidity = fc
@@ -232,14 +235,11 @@ class HumidityChart {
           const { width, height } = event.detail;
           xScale.range([0, width]);
           yScale.range([height, 0]);
-          // Remove windows to allow resizing with browser window
-          selection.select('#window0dB').remove();
-          selection.select('#window10dB').remove();
-          selection.select('#window12dB').remove();
         });
 
-        // Draw limitation windows
+        // Draw limitation windows, replacing the ones of the previous draw
         selection.on('draw', (event) => {
+          selection.select('.plot-area').select('svg').selectAll('.limitWindow').remove();
           const line = fc
             .seriesSvgLine()
             .xScale(xScale)
@@ -255,6 +255,7 @@ class HumidityChart {
             .datum(this.window12dB)
             .call(line)
             .attr('id', 'window12dB')
+            .classed('limitWindow', true)
             .lower();
           // Plot 10dB window
           selection
@@ -264,6 +265,7 @@ class HumidityChart {
             .datum(this.window10dB)
             .call(line)
             .attr('id', 'window10dB')
+            .classed('limitWindow', true)
             .lower();
           // Plot 0dB window
           selection
@@ -273,6 +275,7 @@ class HumidityChart {
             .datum(this.window0dB)
             .call(line)
             .attr('id', 'window0dB')
+            .classed('limitWindow', true)
             .lower();
         });
       });

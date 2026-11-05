@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-/* Know server commands, same as in meteoserver.h. */
+/* Known server commands, same as in meteoserver.h. */
 const ServerCmd = Object.freeze({
   Start: 0x1a,
   Stop: 0x2b,
@@ -24,6 +24,10 @@ const ServerCmd = Object.freeze({
   Heading: 0x5e,
   TimeSync: 0x6f
 });
+
+const SERVER_PORT = 10024;
+/* Size of the packed t_packet_data in meteoserver.h. */
+const PACKET_SIZE = 150;
 
 /*
  * Data received from meteo websocket server.
@@ -34,9 +38,6 @@ const serverData = Object.seal({
   maws_second: 0,
   maws_minute: 0,
   maws_hour: 0,
-  day: 0,
-  month: 0,
-  year: 0,
   topNumber: 0,
   flightNumber: 0,
   gpsStatus: 0,
@@ -70,98 +71,78 @@ const serverData = Object.seal({
 /*
  * Websocket for server communication.
  */
-let socket8080 = null;
+let socket = null;
 
 const connection = navigator.connection || navigator.mozConnection || null;
 if (connection === null) {
-  console.error('Network Information API not supported.');
-}
-
-/**
- * Because JavaScript does not currently include standard support for 64-bit integer values,
- * DataView does not offer native 64-bit operations.
- */
-function getUint64(dataview, byteOffset, littleEndian) {
-  // split 64-bit number into two 32-bit (4-byte) parts
-  const left = dataview.getUint32(byteOffset, littleEndian);
-  const right = dataview.getUint32(byteOffset + 4, littleEndian);
-
-  // combine the two 32-bit values
-  const combined = littleEndian ? left + 2 ** 32 * right : 2 ** 32 * left + right;
-
-  if (!Number.isSafeInteger(combined)) console.warn(combined, 'exceeds MAX_SAFE_INTEGER. Precision may be lost');
-
-  return combined;
+  console.info('Network Information API not supported.');
 }
 
 /*
- * Connects with port 8080
+ * Connects to the meteo server on the host that served this page.
  */
-function connect8080() {
-  console.info(`Location hostname: ${location.hostname}`);
+function connect() {
+  const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
+  socket = new WebSocket(`${scheme}://${location.hostname}:${SERVER_PORT}`, 'broadcast');
+  socket.binaryType = 'arraybuffer';
 
-  socket8080 = new WebSocket(`ws://${location.hostname}:10024`, 'broadcast');
-  socket8080.binaryType = 'arraybuffer';
-
-  socket8080.onmessage = (e) => {
-    if (typeof e.data === 'string') {
-      //  string is only if CRC is NOK
-      console.error(`Wrong type of received message: ${e.data}`);
-    } else {
-      const arr = new Uint8Array(e.data);
-      const dv = new DataView(arr.buffer, 0, arr.length);
-      serverData.gpsHDOP = dv.getFloat64(0, true);
-      serverData.gpsPDOP = dv.getFloat64(8, true);
-      serverData.gpsLat = dv.getFloat64(16, true);
-      serverData.gpsLon = dv.getFloat64(24, true);
-      serverData.gpsAltMsl = dv.getFloat64(32, true);
-      serverData.temperature = dv.getFloat64(40, true);
-      serverData.baroPressure = dv.getFloat64(48, true);
-      serverData.windspeed = dv.getFloat64(56, true);
-      serverData.windspeedMean = dv.getFloat64(64, true);
-      serverData.crossWindspeed = dv.getFloat64(72, true);
-      serverData.crossWindspeedMean = dv.getFloat64(80, true);
-      serverData.headWindspeed = dv.getFloat64(88, true);
-      serverData.QFE = dv.getFloat64(96, true);
-      serverData.QNH = dv.getFloat64(104, true);
-      serverData.gpsTime = dv.getFloat64(112, true);
-      serverData.localTime = dv.getFloat64(120, true);
-      serverData.flightNumber = dv.getInt16(128, true);
-      serverData.runwayHeading = dv.getInt16(130, true);
-      serverData.runwayElevation = dv.getInt16(132, true);
-      serverData.windDirection = dv.getInt16(134, true);
-      serverData.windDirectionMean = dv.getInt16(136, true);
-      serverData.barometerHeight = dv.getInt8(138, true);
-      serverData.maws_hour = dv.getInt8(139, true);
-      serverData.maws_minute = dv.getInt8(140, true);
-      serverData.maws_second = dv.getInt8(141, true);
-      serverData.humidity = dv.getInt8(142, true);
-      serverData.topNumber = dv.getInt8(143, true);
-      serverData.gpsStatus = dv.getInt8(144, true);
-      serverData.gpsMode = dv.getInt8(145, true);
-      serverData.gpsSatellitesVisible = dv.getInt8(146, true);
-      serverData.gpsSatellitesUsed = dv.getInt8(147, true);
-      serverData.recordStatus = dv.getInt8(148, true);
-      serverData.fromToStatus = dv.getInt8(149, true);
-
-      self.postMessage({ cmd: 'data', data: serverData });
+  socket.onmessage = (e) => {
+    if (typeof e.data === 'string' || e.data.byteLength < PACKET_SIZE) {
+      console.error('Unexpected message from server.');
+      return;
     }
+
+    const dv = new DataView(e.data);
+    serverData.gpsHDOP = dv.getFloat64(0, true);
+    serverData.gpsPDOP = dv.getFloat64(8, true);
+    serverData.gpsLat = dv.getFloat64(16, true);
+    serverData.gpsLon = dv.getFloat64(24, true);
+    serverData.gpsAltMsl = dv.getFloat64(32, true);
+    serverData.temperature = dv.getFloat64(40, true);
+    serverData.baroPressure = dv.getFloat64(48, true);
+    serverData.windspeed = dv.getFloat64(56, true);
+    serverData.windspeedMean = dv.getFloat64(64, true);
+    serverData.crossWindspeed = dv.getFloat64(72, true);
+    serverData.crossWindspeedMean = dv.getFloat64(80, true);
+    serverData.headWindspeed = dv.getFloat64(88, true);
+    serverData.QFE = dv.getFloat64(96, true);
+    serverData.QNH = dv.getFloat64(104, true);
+    serverData.gpsTime = dv.getFloat64(112, true);
+    serverData.localTime = dv.getFloat64(120, true);
+    serverData.flightNumber = dv.getUint16(128, true);
+    serverData.runwayHeading = dv.getUint16(130, true);
+    serverData.runwayElevation = dv.getUint16(132, true);
+    serverData.windDirection = dv.getUint16(134, true);
+    serverData.windDirectionMean = dv.getUint16(136, true);
+    serverData.barometerHeight = dv.getUint8(138);
+    serverData.maws_hour = dv.getUint8(139);
+    serverData.maws_minute = dv.getUint8(140);
+    serverData.maws_second = dv.getUint8(141);
+    serverData.humidity = dv.getUint8(142);
+    serverData.topNumber = dv.getUint8(143);
+    serverData.gpsStatus = dv.getUint8(144);
+    serverData.gpsMode = dv.getUint8(145);
+    serverData.gpsSatellitesVisible = dv.getUint8(146);
+    serverData.gpsSatellitesUsed = dv.getUint8(147);
+    serverData.recordStatus = dv.getUint8(148);
+    serverData.fromToStatus = dv.getUint8(149);
+
+    self.postMessage({ cmd: 'data', data: serverData });
   };
 
-  socket8080.onclose = () => {
+  socket.onerror = () => {
+    console.error('Connection error.');
+  };
+
+  socket.onclose = () => {
     console.warn('Connection closed.');
-    socket8080 = null;
+    socket = null;
     self.postMessage({ cmd: 'disconnected', data: null });
-    setTimeout(() => {
-      connect8080();
-    }, 1000);
+    setTimeout(connect, 1000);
   };
 
-  /*
-   * Event functions for socket
-   */
-  socket8080.onopen = () => {
-    console.info('Connected with port 8080');
+  socket.onopen = () => {
+    console.info(`Connected with ${location.hostname}:${SERVER_PORT}`);
     self.postMessage({ cmd: 'connected', data: null });
   };
 }
@@ -170,81 +151,62 @@ function connect8080() {
  * Get network connection info
  */
 function getNetworkInfo() {
-  if (connection !== null) {
-    const { type } = connection;
-    if (type !== undefined) {
-      /* type not available in all browsers? */
-    }
+  if (connection !== null && connection.downlink !== undefined) {
     self.postMessage({
       cmd: 'network',
-      data: connection.downlink
-    }); /* In Mbps */
+      data: connection.downlink /* In Mbps */
+    });
   }
+}
+
+/*
+ * Send a command to the server: command id, optionally followed by a 16 bit value
+ * and, for Start, the 8 bit TOP number. Values are little endian.
+ */
+function sendCommand(id, value16, value8) {
+  if (socket === null || socket.readyState !== WebSocket.OPEN) {
+    return;
+  }
+
+  const buf = new ArrayBuffer(value8 === undefined ? 1 + (value16 === undefined ? 0 : 2) : 4);
+  const dv = new DataView(buf);
+  dv.setUint8(0, id);
+  if (value16 !== undefined) {
+    dv.setUint16(1, value16, true);
+  }
+  if (value8 !== undefined) {
+    dv.setUint8(3, value8);
+  }
+  socket.send(buf);
 }
 
 self.onmessage = (e) => {
   const msg = e.data;
   switch (msg.cmd) {
     case 'connect':
-      connect8080();
+      connect();
       break;
     case 'start':
-      if (socket8080 !== null && socket8080.readyState === 1) {
-        const buf = new ArrayBuffer(4);
-        const dv = new DataView(buf);
-        dv.setUint8(0, ServerCmd.Start);
-        dv.setUint16(1, msg.data.flightNumber, true);
-        dv.setUint8(3, msg.data.topNumber);
-        socket8080.send(buf);
-      }
+      sendCommand(ServerCmd.Start, msg.data.flightNumber, msg.data.topNumber);
       break;
     case 'stop':
-      if (socket8080 !== null && socket8080.readyState === 1) {
-        const buf = new ArrayBuffer(1);
-        const dv = new DataView(buf);
-        dv.setUint8(0, ServerCmd.Stop);
-        socket8080.send(buf);
-      }
+      sendCommand(ServerCmd.Stop);
       break;
     case 'fromto':
-      if (socket8080 !== null && socket8080.readyState === 1) {
-        const buf = new ArrayBuffer(1);
-        const dv = new DataView(buf);
-        dv.setUint8(0, ServerCmd.FromTo);
-        socket8080.send(buf);
-      }
+      sendCommand(ServerCmd.FromTo);
       break;
     case 'elevation':
-      if (socket8080 !== null && socket8080.readyState === 1) {
-        const buf = new ArrayBuffer(3);
-        const dv = new DataView(buf);
-        dv.setUint8(0, ServerCmd.Elevation);
-        dv.setUint16(1, msg.data.elevation, true);
-        socket8080.send(buf);
-      }
+      sendCommand(ServerCmd.Elevation, msg.data.elevation);
       break;
     case 'heading':
-      if (socket8080 !== null && socket8080.readyState === 1) {
-        const buf = new ArrayBuffer(3);
-        const dv = new DataView(buf);
-        dv.setUint8(0, ServerCmd.Heading);
-        dv.setUint16(1, msg.data.heading, true);
-        socket8080.send(buf);
-      }
+      sendCommand(ServerCmd.Heading, msg.data.heading);
       break;
     case 'timesync':
-      if (socket8080 !== null && socket8080.readyState === 1) {
-        const buf = new ArrayBuffer(1);
-        const dv = new DataView(buf);
-        dv.setUint8(0, ServerCmd.TimeSync);
-        socket8080.send(buf);
-      }
+      sendCommand(ServerCmd.TimeSync);
       break;
     default:
       console.error(`Unknown command: ${msg.cmd}`);
   }
 };
 
-setInterval(() => {
-  getNetworkInfo();
-}, 5000);
+setInterval(getNetworkInfo, 5000);
