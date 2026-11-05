@@ -38,3 +38,12 @@ d3fc-group.cartesian-chart > .plot-area {
   border-width: medium;
   margin: 2px;
 }
+
+/* Same colors as the pointers in images/hsi.svg */
+.wind-instant {
+  color: teal;
+}
+
+.wind-mean {
+  color: darkorange;
+}

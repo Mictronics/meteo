@@ -12,7 +12,7 @@
         .windArrow{fill:teal;stroke:teal;}
         .crossWindArrow{fill:none;stroke:#000000;display: none;}
         .headWindArrow{fill:none;stroke:#000000;display:none;}
-        .meanWindArrow{fill:indigo;stroke:indigo;}
+        .meanWindArrow{fill:darkorange;stroke:darkorange;}
 	</style>
     <defs>
         <marker id="IDI_13" refX="0" refY="0" orient="auto" markerUnits="strokeWidth" style="overflow:visible;" markerWidth="6.343432426452637" markerHeight="6.343432903289795" viewBox="-5.400596618652344 -3.1717164516448975 6.343432426452637 6.343432903289795" class="">
