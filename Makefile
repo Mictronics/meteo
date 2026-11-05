@@ -4,7 +4,7 @@ CPPFLAGS += -D_GNU_SOURCE
 DIALECT = -std=c18
 CFLAGS += $(DIALECT) -O2 -g -W -D_DEFAULT_SOURCE -Wall -fno-common -Wmissing-declarations -MMD -MP
 LIBS = -lpthread -lwebsockets -lgps -lm
-LDFLAGS =
+LDFLAGS +=
 
 OBJ = server/meteoserver.o server/serial.o server/average.o
 

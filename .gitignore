@@ -7,3 +7,12 @@ package-lock.json
 server/test_average
 server/version.h
 client/scripts/version.js
+
+# Debian build output
+debian/.debhelper/
+debian/meteo/
+debian/*.debhelper
+debian/*.substvars
+debian/debhelper-build-stamp
+debian/files
+debian/*.debhelper.log

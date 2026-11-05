@@ -1,0 +1,57 @@
+.TH METEOSERVER 1 "November 2026" "meteo" "User Commands"
+.SH NAME
+meteoserver \- websocket server for a Vaisala weather station
+.SH SYNOPSIS
+.B meteoserver
+[\fIOPTION\fR]...
+.SH DESCRIPTION
+Reads a Vaisala MAWS weather station over a serial port and a GPS receiver
+through gpsd, and pushes the data to web clients via websocket.
+.SH OPTIONS
+.TP
+\fB\-i\fR, \fB\-\-ip\fR=\fIIP\fR
+Listen IP address or host [default: all interfaces]
+.TP
+\fB\-p\fR, \fB\-\-port\fR=\fIport\fR
+Listen port [default: 8080]
+.TP
+\fB\-\-serial\fR=\fIdevice\fR
+Serial device [default: /dev/ttyUSB0]
+.TP
+\fB\-\-baudrate\fR=\fIbaudrate\fR
+Serial baudrate [default: 9600]
+.TP
+\fB\-\-group\fR=\fIid\fR
+Websocket group id [default: \-1]
+.TP
+\fB\-\-user\fR=\fIid\fR
+Websocket user id [default: \-1]
+.TP
+\fB\-D\fR, \fB\-\-daemon\fR
+Run meteoserver as a daemon
+.TP
+\fB\-d\fR, \fB\-\-debug\fR=\fIlevel\fR
+libwebsockets log level bitmask [default: 7 (errors, warnings, notices)]
+.TP
+\fB\-\-no\-gps\fR
+Disable GPS support
+.TP
+\fB\-?\fR, \fB\-\-help\fR
+Give a help list
+.TP
+\fB\-\-usage\fR
+Give a short usage message
+.TP
+\fB\-V\fR, \fB\-\-version\fR
+Print program version
+.SH FILES
+.TP
+.I /etc/default/meteo
+Options passed by the systemd service (\fBSERVER_OPTIONS\fR).
+.TP
+.I /var/meteodata
+Recorded CSV data.
+.SH BUGS
+Report bugs to Michael Wolf <michael@mictronics.de>.
+.SH AUTHOR
+Michael Wolf

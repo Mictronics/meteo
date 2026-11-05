@@ -1,22 +1,31 @@
-# meteoserver service for systemd
-
 [Unit]
-Description= Meteo websocket server
-Documentation=
-Wants=network.target
-After=network.target
-After=sockets.target
+Description=Meteo websocket server
+After=network.target gpsd.service
 
 [Service]
-EnvironmentFile=/etc/default/meteo
-User=meteo
-StandardOutput=null
-StandardError=journal
-ExecStart=/usr/bin/meteoserver $SERVER_OPTIONS
 Type=simple
+EnvironmentFile=/etc/default/meteo
+ExecStart=/usr/bin/meteoserver $SERVER_OPTIONS
+User=meteo
+SupplementaryGroups=dialout
 Restart=on-failure
 RestartSec=30
-Nice=0
+StandardOutput=null
+StandardError=journal
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/var/meteodata
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+DevicePolicy=closed
+DeviceAllow=char-ttyUSB rw
+DeviceAllow=char-ttyACM rw
+DeviceAllow=char-ttyS rw
+DeviceAllow=char-ttyAMA rw
 
 [Install]
 WantedBy=multi-user.target
