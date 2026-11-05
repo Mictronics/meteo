@@ -30,8 +30,10 @@ Remove the package `sudo apt-get purge meteo`.
 
 To configure the service add commandline options to `/etc/default/meteo` as required.
 
-The websocket server has no authentication and listens on all interfaces unless
-`-i <address>` is given. Restrict access to the port (default in the package: 10024) with a firewall.
+The websocket server has no authentication of its own and listens on all interfaces unless
+`-i <address>` is given. Every client may operate the UI (recording, runway data, MAWS time sync).
+It is meant to run on an isolated Wi-Fi access point, where the Wi-Fi credentials are the access
+control. Do not connect it to the internet or to an untrusted network.
 
 ## Versioning and releases
 
