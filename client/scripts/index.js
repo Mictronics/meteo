@@ -1,6 +1,6 @@
 // Part of WebMeteo, a Vaisalla weather data visualization.
 //
-// Copyright (c) 2021 Michael Wolf <michael@mictronics.de>
+// Copyright (c) 2026 Michael Wolf <michael@mictronics.de>
 //
 // This file is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -196,7 +196,8 @@ function UpdateGui(serverData) {
   $('windDirection').textContent = serverData.windDirection.toFixed(0);
   $('windspeed').textContent = serverData.windspeed.toFixed(1);
 
-  $('crossWindspeedLabel').textContent = serverData.crossWindspeed < 0.0 ? 'Crosswind from left [kts]' : 'Crosswind from right [kts]';
+  $('crossWindspeedLabel').textContent =
+    serverData.crossWindspeed < 0.0 ? 'Crosswind from left [kts]' : 'Crosswind from right [kts]';
   $('crossWindspeed').textContent = Math.abs(serverData.crossWindspeed).toFixed(1);
   $('headWindspeedLabel').textContent = serverData.headWindspeed < 0.0 ? 'Tailwind [kts]' : 'Headwind [kts]';
   $('headWindspeed').textContent = Math.abs(serverData.headWindspeed).toFixed(1);

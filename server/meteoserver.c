@@ -1,6 +1,6 @@
 // Part of WebMeteo, a Vaisalla weather data visualization.
 //
-// Copyright (c) 2021 Michael Wolf <michael@mictronics.de>
+// Copyright (c) 2026 Michael Wolf <michael@mictronics.de>
 //
 // This file is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -101,7 +101,7 @@ struct per_vhost_data
 static error_t parse_opt(int key, char *arg, struct argp_state *state);
 const char *argp_program_version = "meteoserver " METEO_VERSION;
 const char args_doc[] = "";
-const char doc[] = "Websocket Server for Vaisalla weather station\nLicense GPL-3+\n(C) 2021 Michael Wolf\n"
+const char doc[] = "Websocket Server for Vaisalla weather station\nLicense GPL-3+\n(C) 2026 Michael Wolf\n"
                    "This server provides weather and GPS data to web application via websocket.";
 static struct argp argp = {options, parse_opt, args_doc, doc, NULL, NULL, NULL};
 
