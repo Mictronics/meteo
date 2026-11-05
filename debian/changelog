@@ -1,3 +1,9 @@
+meteo (1.1.0) unstable; urgency=medium
+
+  * First semantic version release.
+
+ -- Mictronics <github@mictronics.de>  Thu, 05 Nov 2026 18:59:28 +0100
+
 meteo (1.0.0~dev) UNRELEASED; urgency=medium
 
   * Initial release.
