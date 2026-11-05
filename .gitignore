@@ -3,4 +3,5 @@ node_modules
 *.o
 meteoserver
 package-lock.json
-.prettierrc
+*.d
+server/test_average

@@ -2,13 +2,14 @@ Source: meteo
 Section: net
 Priority: optional
 Maintainer: Michael Wolf <michael@mictronics.de>
-Build-Depends: debhelper(>=10), libgps-dev, libpthread-stubs0-dev, libwebsockets-dev(>=2), pkg-config, dh-systemd
-Standards-Version: 1.0.0
+Build-Depends: debhelper(>=10), libgps-dev, libpthread-stubs0-dev, libwebsockets-dev(>=4.0), pkg-config
+Standards-Version: 4.6.2
 Homepage: https://github.com/mictronics/meteo
 Vcs-Git: https://github.com/Mictronics/meteo.git
 
 Package: meteo
 Architecture: any
-Depends: ${misc:Depends}, libgps-dev, libpthread-stubs0-dev
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Recommends: lighttpd, gpsd
 Description: Websocket server for Vaisalla weather station
  This server provides Vaisalla weather data to web application via websocket.

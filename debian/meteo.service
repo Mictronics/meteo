@@ -19,4 +19,4 @@ RestartSec=30
 Nice=0
 
 [Install]
-WantedBy=default.target
+WantedBy=multi-user.target
