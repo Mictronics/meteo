@@ -47,3 +47,26 @@ d3fc-group.cartesian-chart > .plot-area {
 .wind-mean {
   color: darkorange;
 }
+
+/* Colors match #window0dB/#window10dB/#window12dB above */
+.legend span::before {
+  content: '';
+  display: inline-block;
+  width: 1.5em;
+  margin-right: 0.4em;
+  vertical-align: middle;
+  border-top: 5px solid;
+  border-radius: 3px;
+}
+
+.legend-0dB::before {
+  color: red;
+}
+
+.legend-10dB::before {
+  color: blue;
+}
+
+.legend-12dB::before {
+  color: green;
+}
