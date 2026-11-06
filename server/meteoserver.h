@@ -60,6 +60,7 @@ typedef struct __attribute__((__packed__))
     unsigned char gps_satellites_used;
     unsigned char record_status;
     unsigned char from_to_status;
+    unsigned char maws_status; // 1 while MAWS lines keep arriving, 0 when stale or absent
 } t_packet_data;
 
 typedef struct __attribute__((__packed__))

@@ -48,6 +48,7 @@
 #endif
 #define PACKET_INTERVAL_US 500000 /* Websocket update rate */
 #define RECORD_INTERVAL_US 1000000
+#define MAWS_STALE_SEC 5 // MAWS sends one line per second
 // See ICAO doc 7488
 #define EARTH_G 9.80665
 #define R 287.05287
@@ -177,6 +178,13 @@ static void set_record_status(unsigned char status)
 {
     pthread_mutex_lock(&lock_packetdata);
     packet_data.record_status = status;
+    pthread_mutex_unlock(&lock_packetdata);
+}
+
+static void set_maws_status(unsigned char status)
+{
+    pthread_mutex_lock(&lock_packetdata);
+    packet_data.maws_status = status;
     pthread_mutex_unlock(&lock_packetdata);
 }
 
@@ -674,6 +682,7 @@ static void *gps_read_thread(void *arg)
 static void reopen_serial(void)
 {
     close_serial();
+    set_maws_status(0);
     while (!serial_thread_exit)
     {
         usleep(500000);
@@ -698,6 +707,8 @@ static void *serial_read_thread(void *arg)
     t_mean mean;
     char *buf;
     ssize_t len = 0;
+    struct timespec last_line;
+    clock_gettime(CLOCK_MONOTONIC, &last_line);
 
     while (!serial_thread_exit)
     {
@@ -713,6 +724,10 @@ static void *serial_read_thread(void *arg)
         }
         if (len == 0)
         {
+            struct timespec now;
+            clock_gettime(CLOCK_MONOTONIC, &now);
+            if (now.tv_sec - last_line.tv_sec >= MAWS_STALE_SEC)
+                set_maws_status(0);
             usleep(10000);
             continue;
         }
@@ -723,6 +738,7 @@ static void *serial_read_thread(void *arg)
         int items = sscanf(buf, "%lf\t%hhu\t%lf\t%lf\t%hu\t%hhu\t%hhu\t%hhu", &temperature, &humidity, &pressure, &windspeed, &wind_direction, &hour, &min, &sec);
         if (items != 8)
             continue;
+        clock_gettime(CLOCK_MONOTONIC, &last_line);
 
         pthread_mutex_lock(&lock_packetdata);
         unsigned short runway_heading = packet_data.runway_heading;
@@ -761,6 +777,7 @@ static void *serial_read_thread(void *arg)
         packet_data.maws_hour = hour;
         packet_data.maws_min = min;
         packet_data.maws_sec = sec;
+        packet_data.maws_status = 1;
         pthread_mutex_unlock(&lock_packetdata);
     }
 

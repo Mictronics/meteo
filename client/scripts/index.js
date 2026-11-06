@@ -20,6 +20,7 @@ const MAX_ELEVATION_FT = 29030;
 let flightNumber = -1;
 let topNumber = -1;
 let recordStatus = -1;
+let mawsStatus = -1;
 let runwayHeading = -1;
 let runwayElevation = -1;
 let hsiHeadingPending = false;
@@ -117,6 +118,17 @@ function UpdateGui(serverData) {
     tn.classList.add('is-invalid');
   } else {
     tn.classList.remove('is-invalid');
+  }
+
+  // MAWS watchdog: serial data stopped arriving
+  if (mawsStatus !== serverData.mawsStatus) {
+    if (mawsStatus !== -1 || serverData.mawsStatus === 0) {
+      showNoty(serverData.mawsStatus ? 'MAWS data resumed' : 'No data from MAWS!', serverData.mawsStatus ? 'success' : 'error');
+    }
+    mawsStatus = serverData.mawsStatus;
+    $('mawsLabel').textContent = mawsStatus ? 'MAWS / GPS UTC' : 'MAWS NO DATA / GPS UTC';
+    $('mawsLabel').classList.toggle('text-danger', !mawsStatus);
+    $('mawsLabel').classList.toggle('text-black-50', !!mawsStatus);
   }
 
   // Record status: 0 idle, 1 recording, 2 failed (disk error)

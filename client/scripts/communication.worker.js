@@ -27,7 +27,7 @@ const ServerCmd = Object.freeze({
 
 const SERVER_PORT = 10024;
 /* Size of the packed t_packet_data in meteoserver.h. */
-const PACKET_SIZE = 150;
+const PACKET_SIZE = 151;
 
 /*
  * Data received from meteo websocket server.
@@ -53,6 +53,7 @@ const serverData = Object.seal({
   runwayElevation: 0,
   runwayHeading: 0,
   fromToStatus: 0,
+  mawsStatus: 0,
   temperature: 0,
   humidity: 0,
   baroPressure: 0,
@@ -126,6 +127,7 @@ function connect() {
     serverData.gpsSatellitesUsed = dv.getUint8(147);
     serverData.recordStatus = dv.getUint8(148);
     serverData.fromToStatus = dv.getUint8(149);
+    serverData.mawsStatus = dv.getUint8(150);
 
     self.postMessage({ cmd: 'data', data: serverData });
   };
