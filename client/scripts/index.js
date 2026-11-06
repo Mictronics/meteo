@@ -31,11 +31,11 @@ const windspeedChart = new WindspeedChart('#windspeedChart', 0, 0);
 const humidityChart = new HumidityChart('#humidityChart', 0, 0);
 
 const gpsStatus = [
-  'No Fix', // No Fix
+  '', // Unknown: receiver sends no fix type (mode 1 shows No Fix)
   'SPS', // plain GPS (SPS Mode), without DGPS, PPS, RTK, DR, etc.
   'DGPS', // Differential GPS
-  'RTK', // RTK float
   'RTK', // RTK fixed
+  'RTK', // RTK float
   'DR', // Dead reckoning
   'GNSDR', // GNSS + dead reckoning
   'TIME', // Time only
@@ -45,7 +45,7 @@ const gpsStatus = [
 
 const gpsMode = [
   '', // 0 mode update not seen yet
-  '', // 1 none
+  'No Fix', // 1 none
   '2D', // 2 good for latitude/longitude
   '3D' // 3 good for altitude/climb too
 ];
