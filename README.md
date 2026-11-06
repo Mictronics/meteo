@@ -70,6 +70,34 @@ The websocket server has no authentication of its own and listens on all interfa
 It is meant to run on an isolated Wi-Fi access point, where the Wi-Fi credentials are the access
 control. Do not connect it to the internet or to an untrusted network.
 
+### Read-only root (overlayroot on DietPi)
+
+To protect the SD card against power cuts, the root filesystem can run under a tmpfs overlay.
+Recordings are unaffected because `/mnt/data` is a separate partition (`recurse=0` keeps it
+a normal mount). Anything else written outside `/mnt/data` is lost at reboot.
+
+1. Keep `/` as `rw` in `/etc/fstab` (do not use the `dietpi-drive_manager` read-only root option,
+   it breaks boot). Install `overlayroot` and `busybox`. Without busybox the initramfs has no
+   `grep` and overlayroot silently refuses to start.
+2. `/etc/overlayroot.conf`:
+   ```
+   overlayroot_cfgdisk="disabled"
+   overlayroot="tmpfs:recurse=0"
+   ```
+3. Build the initramfs and have the firmware load it, then reboot:
+   ```
+   sudo apt-mark manual busybox overlayroot
+   sudo update-initramfs -c -k $(uname -r)
+   echo "auto_initramfs=1" | sudo tee -a /boot/firmware/config.txt
+   ```
+4. Check: `findmnt /` shows `overlayroot`, and `/run/initramfs/overlayroot.log` ends with `[success]`.
+
+Maintenance: `sudo overlayroot-chroot` gives a shell on the real root for permanent changes
+(packages, `/etc/default/meteo`). Edits made on the running system are lost at reboot.
+
+Recovery if it does not boot: mount the SD card's boot partition on a PC and remove
+`auto_initramfs=1` from `config.txt` and any `overlayroot=` from `cmdline.txt`.
+
 ## Versioning and releases
 
 Versions follow [semver](https://semver.org). The git tag `vX.Y.Z` is the single source of truth.
