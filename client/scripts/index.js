@@ -21,6 +21,8 @@ let flightNumber = -1;
 let topNumber = -1;
 let recordStatus = -1;
 let mawsStatus = -1;
+let offlineNoty = null;
+let mawsNoty = null;
 let runwayHeading = -1;
 let runwayElevation = -1;
 let hsiHeadingPending = false;
@@ -122,8 +124,12 @@ function UpdateGui(serverData) {
 
   // MAWS watchdog: serial data stopped arriving
   if (mawsStatus !== serverData.mawsStatus) {
-    if (mawsStatus !== -1 || serverData.mawsStatus === 0) {
-      showNoty(serverData.mawsStatus ? 'MAWS data resumed' : 'No data from MAWS!', serverData.mawsStatus ? 'success' : 'error');
+    if (mawsNoty) mawsNoty.close();
+    mawsNoty = null;
+    if (serverData.mawsStatus === 0) {
+      mawsNoty = showNoty('No data from MAWS!', 'error');
+    } else if (mawsStatus !== -1) {
+      showNoty('MAWS data resumed', 'success');
     }
     mawsStatus = serverData.mawsStatus;
     $('mawsLabel').textContent = mawsStatus ? 'MAWS / GPS UTC' : 'MAWS NO DATA / GPS UTC';
@@ -139,6 +145,7 @@ function UpdateGui(serverData) {
   recordStatus = serverData.recordStatus;
   fn.disabled = recording;
   tn.disabled = recording;
+  $('recordButton').disabled = false;
   $('recordSpinner').classList.toggle('d-none', !recording);
   $('recordLabel').textContent = ['Record', 'Stop', 'FAILED - retry'][recordStatus] || 'Record';
   $('recordButton').classList.toggle('btn-danger', recordStatus !== 2);
@@ -288,17 +295,20 @@ function OnTimeSyncButtonClick(ev) {
   });
 }
 
-// Show new noty of specific type
+// Show new noty of specific type. Errors stay until clicked.
 function showNoty(text, type) {
-  new Noty({
+  const noty = new Noty({
     layout: 'topLeft',
     progressBar: false,
     text,
     theme: 'bootstrap-v4',
-    timeout: 1500,
+    timeout: type === 'error' ? false : 1500,
+    closeWith: ['click'],
     type,
     container: '#noty'
-  }).show();
+  });
+  noty.show();
+  return noty;
 }
 
 // Start application as soon as DOM is fully loaded
@@ -310,10 +320,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const msg = e.data;
     switch (msg.cmd) {
       case 'connected':
+        if (offlineNoty) offlineNoty.close();
+        offlineNoty = null;
         showNoty('Weather station connected', 'success');
         break;
       case 'disconnected':
-        showNoty('Weather station disconnected', 'error');
+        // The worker retries every second; show the outage only once
+        if (offlineNoty === null) {
+          offlineNoty = showNoty('Weather station disconnected', 'error');
+        }
+        $('recordButton').disabled = true;
+        $('recordSpinner').classList.add('d-none');
+        $('recordLabel').textContent = 'DISCONNECTED';
         break;
       case 'network':
         $('linkSpeed').textContent = `${msg.data}Mbps`;
