@@ -538,6 +538,27 @@ static double finite_or_zero(double v)
     return isfinite(v) ? v : 0.0;
 }
 
+#define GPS_STALE_SEC 5 // No gpsd message for this long: drop the last fix
+
+/**
+ * Zero the GPS fields so clients and the MAWS time sync never see a frozen fix.
+ */
+static void clear_gps_data(void)
+{
+    pthread_mutex_lock(&lock_packetdata);
+    packet_data.gps_status = 0;
+    packet_data.gps_mode = 0;
+    packet_data.gps_satellites_visible = 0;
+    packet_data.gps_satellites_used = 0;
+    packet_data.gps_hdop = 0;
+    packet_data.gps_pdop = 0;
+    packet_data.gps_lat = 0;
+    packet_data.gps_lon = 0;
+    packet_data.gps_alt_msl = 0;
+    packet_data.gps_time = 0;
+    pthread_mutex_unlock(&lock_packetdata);
+}
+
 /**
  * GPS read thread.
  * This need its own thread to avoid delays in time update.
@@ -548,6 +569,8 @@ static void *gps_read_thread(void *arg)
     thread_to_core(2);
     bool connected = false;
     bool warned = false;
+    struct timespec last_msg;
+    bool stale = true;
 
     lwsl_notice("GPS read thread started.\n");
     while (!gps_thread_exit)
@@ -559,16 +582,32 @@ static void *gps_read_thread(void *arg)
                 if (!warned)
                     lwsl_err("No gpsd running or network error: %s\n", gps_errstr(errno));
                 warned = true;
+                if (!stale)
+                {
+                    clear_gps_data();
+                    stale = true;
+                }
                 sleep(1);
                 continue;
             }
-            gps_stream(&gpsdata, WATCH_ENABLE, NULL);
+            gps_stream(&gpsdata, WATCH_ENABLE | WATCH_JSON, NULL);
+            clock_gettime(CLOCK_MONOTONIC, &last_msg);
             connected = true;
             warned = false;
         }
 
         if (!gps_waiting(&gpsdata, 500000))
+        {
+            struct timespec now;
+            clock_gettime(CLOCK_MONOTONIC, &now);
+            if (!stale && now.tv_sec - last_msg.tv_sec >= GPS_STALE_SEC)
+            {
+                lwsl_warn("No GPS data from gpsd, clearing fix.\n");
+                clear_gps_data();
+                stale = true;
+            }
             continue;
+        }
 
 #if GPSD_API_MAJOR_VERSION < 9
         if (gps_read(&gpsdata) == -1)
@@ -579,10 +618,14 @@ static void *gps_read_thread(void *arg)
             lwsl_err("GPS read error.\n");
             gps_close(&gpsdata);
             connected = false;
+            clear_gps_data();
+            stale = true;
             sleep(1);
             continue;
         }
 
+        clock_gettime(CLOCK_MONOTONIC, &last_msg);
+        stale = false;
         pthread_mutex_lock(&lock_packetdata);
 #if GPSD_API_MAJOR_VERSION < 10
         packet_data.gps_status = (unsigned char)gpsdata.status;
