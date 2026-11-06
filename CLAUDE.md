@@ -32,11 +32,11 @@ WebMeteo visualizes data from a Vaisala weather station (MAWS) for EASA acoustic
 - `scripts/communication.worker.js` is a Web Worker that owns the websocket and decodes the binary packet. Its field order and sizes must match `t_packet_data`, and its `ServerCmd` constants must match `SERVER_CMD_*` in `meteoserver.h`.
 - `scripts/index.js` is the UI and talks to the worker via `postMessage`. `scripts/charts.js` draws charts with d3/d3fc. Vendored libraries are in `scripts/vendors/`. Do not lint or edit them.
 
-**Deployment (`debian/`)**: systemd service `meteo` reads `SERVER_OPTIONS` from `/etc/default/meteo`. lighttpd serves the client from `/usr/share/webmeteo/` at `/meteo/` and recorded data from `/var/meteodata/` at `/download/`.
+**Deployment (`debian/`)**: systemd service `meteo` reads `SERVER_OPTIONS` from `/etc/default/meteo`. lighttpd serves the client from `/usr/share/webmeteo/` at `/meteo/` and recorded data from `/mnt/data/meteodata/` at `/download/`.
 
 ## Gotchas
 
 - Changing `t_packet_data` or the `SERVER_CMD_*` values requires matching edits in `communication.worker.js`.
 - The version is never edited by hand. The git tag is the truth (`tools/version.sh`); `make` generates the gitignored `server/version.h` and `client/scripts/version.js`, and `debian/rules` takes it from `debian/changelog`.
 - The server has no authentication and listens on all interfaces unless `-i` is given. This is deliberate: it runs on an isolated Wi-Fi access point where the Wi-Fi credentials are the access control, and any connected client may operate the UI. Keep security measures minimal; do not add token or Origin checks unless the deployment changes.
-- Recordings go to `/var/meteodata` (override with `-DRECORD_DIR=\"...\"` at compile time, handy for tests).
+- Recordings go to `/mnt/data/meteodata` (override with `-DRECORD_DIR=\"...\"` at compile time, handy for tests).

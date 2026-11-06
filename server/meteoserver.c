@@ -41,8 +41,10 @@
 #define NOTUSED(V) ((void)V)
 #define MAX_CLIENTS 50
 #define MAX_ELEVATION_FT 29030 /* Same limit as the client input */
+#define SYNC_EVERY 5 // rows (seconds at 1 Hz) between fdatasync calls
+
 #ifndef RECORD_DIR
-#define RECORD_DIR "/var/meteodata"
+#define RECORD_DIR "/mnt/data/meteodata"
 #endif
 #define PACKET_INTERVAL_US 500000 /* Websocket update rate */
 #define RECORD_INTERVAL_US 1000000
@@ -229,6 +231,7 @@ static void start_recording(const t_start_cmd *start_cmd)
     fputs("LOG_TIME;TEMP;HUM;PRESSURE;DIRECTION;WIND_TOTAL;WIND_LAT;MEAN_WIND_TOTAL;MEAN_WIND_LAT;GPS_EPOCH_RECORDED;TIME_MAWS_RECORDED;TOP_NUMBER\n", record_fp);
     fputs("HH:MM:SS;degC;%;mbar;deg;kt;kt;kt;kt;seconds;HH:MM:SS;#\n", record_fp);
     fflush(record_fp);
+    fdatasync(fileno(record_fp));
 
     pthread_mutex_lock(&lock_packetdata);
     packet_data.record_status = 1;
@@ -244,6 +247,8 @@ static void stop_recording(void)
 
     if (was_recording)
     {
+        fflush(record_fp);
+        fdatasync(fileno(record_fp));
         fclose(record_fp);
         record_fp = NULL;
     }
@@ -761,6 +766,10 @@ static void record_timer_cb(lws_sorted_usec_list_t *sul)
             (unsigned)p.maws_sec,
             (unsigned)p.top_number);
     fflush(record_fp);
+    // Commit to flash every SYNC_EVERY rows: bounds data loss on power cut without wearing the SD card
+    static unsigned rows;
+    if (++rows % SYNC_EVERY == 0)
+        fdatasync(fileno(record_fp));
 }
 
 /**

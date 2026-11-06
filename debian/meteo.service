@@ -1,6 +1,7 @@
 [Unit]
 Description=Meteo websocket server
 After=network.target gpsd.service
+RequiresMountsFor=/mnt/data
 
 [Service]
 Type=simple
@@ -15,7 +16,7 @@ StandardError=journal
 
 NoNewPrivileges=yes
 ProtectSystem=strict
-ReadWritePaths=/var/meteodata
+ReadWritePaths=/mnt/data/meteodata
 ProtectHome=yes
 PrivateTmp=yes
 ProtectKernelTunables=yes

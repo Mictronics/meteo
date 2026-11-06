@@ -15,7 +15,7 @@ Websocket server and web client to visualize data from a Vaisala weather station
 
 ## Recordings
 
-Recordings are written to `/var/meteodata/<DDMMYYYY>/F<nnnn>_REC<nnn>_MeteoData_<HHMMSS>.csv`, one row per second.
+Recordings are written to `/mnt/data/meteodata/<DDMMYYYY>/F<nnnn>_REC<nnn>_MeteoData_<HHMMSS>.csv`, one row per second.
 Folder names, file names and the CSV time are in UTC, matching the MAWS and GPS times. The folder is served
 for download at `/download/`. Override the directory at compile time with `-DRECORD_DIR=\"...\"`.
 

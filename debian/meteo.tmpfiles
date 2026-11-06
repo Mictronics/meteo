@@ -1,1 +1,1 @@
-d /var/meteodata 0755 meteo meteo -
+d /mnt/data/meteodata 0755 meteo meteo -
