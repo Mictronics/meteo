@@ -23,8 +23,13 @@ else
     MNT=$(findmnt -no TARGET -T "$DEB")
     [ "$MNT" != / ] || { echo "$DEB is on the volatile overlay, keep the repo on /mnt/data" >&2; exit 1; }
     sudo mount --bind "$MNT" "/media/root-ro$MNT"
-    trap 'sudo umount "/media/root-ro$MNT"' EXIT
-    sudo overlayroot-chroot dpkg -i "$DEB"
+    # The bind keeps /media/root-ro busy, so overlayroot-chroot cannot set it read-only on exit
+    # and returns an error. Unmount, remount ro ourselves and verify the result instead.
+    sudo overlayroot-chroot dpkg -i "$DEB" || true
+    sudo umount "/media/root-ro$MNT"
+    sudo mount -o remount,ro /media/root-ro
+    GOT=$(dpkg-query --admindir=/media/root-ro/var/lib/dpkg -W -f='${Version}' meteo)
+    [ "$GOT" = "$VER" ] || { echo "install failed: real root has meteo $GOT, expected $VER" >&2; exit 1; }
 fi
 
 # Changing the lower layer under a mounted overlay is undefined, so reboot to pick it up.
