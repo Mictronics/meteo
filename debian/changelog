@@ -1,3 +1,9 @@
+meteo (1.2.1) unstable; urgency=medium
+
+  * Document overlayroot setup on DietPi
+
+ -- Mictronics <github@mictronics.de>  Fri, 06 Nov 2026 19:37:36 +0100
+
 meteo (1.2.0) unstable; urgency=medium
 
   * Sync recordings to disk and move data to /mnt/data/meteodata
