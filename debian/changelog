@@ -1,3 +1,19 @@
+meteo (1.2.0) unstable; urgency=medium
+
+  * Sync recordings to disk and move data to /mnt/data/meteodata
+  * Update README for current features and packaging
+  * Align crosswind chart and recording time with ICAO Annex 16
+  * Updated copyright year.
+  * Modernize Debian packaging
+  * Round mean wind direction instead of truncating
+  * Add legend for the humidity/temperature limit windows
+  * Color wind values to match the compass pointers
+  * Update dependencies and simplify lint setup
+  * Added prettier settings.
+  * Document the network security model
+
+ -- Mictronics <github@mictronics.de>  Fri, 06 Nov 2026 17:02:08 +0100
+
 meteo (1.1.0) unstable; urgency=medium
 
   * First semantic version release.
