@@ -95,6 +95,10 @@ a normal mount). Anything else written outside `/mnt/data` is lost at reboot.
 Maintenance: `sudo overlayroot-chroot` gives a shell on the real root for permanent changes
 (packages, `/etc/default/meteo`). Edits made on the running system are lost at reboot.
 
+Updating the software: keep the repository on `/mnt/data` (e.g. `/mnt/data/git/meteo`), because
+a clone on the overlay disappears at reboot. As a normal user run `tools/update.sh`. It pulls,
+builds the package and installs it into the real root through `overlayroot-chroot`. Reboot afterwards.
+
 Recovery if it does not boot: mount the SD card's boot partition on a PC and remove
 `auto_initramfs=1` from `config.txt` and any `overlayroot=` from `cmdline.txt`.
 
