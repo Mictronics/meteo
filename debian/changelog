@@ -1,3 +1,14 @@
+meteo (1.3.0) unstable; urgency=medium
+
+  * client: make connection and failure warnings hard to miss
+  * Flag stale MAWS data to the user
+  * Report recording failures to the user
+  * server: clear GPS data when gpsd goes away or falls silent
+  * client: fix GPS status labels to match gpsd
+  * client: let the footer scroll with the page
+
+ -- Mictronics <github@mictronics.de>  Fri, 06 Nov 2026 21:44:17 +0100
+
 meteo (1.2.1) unstable; urgency=medium
 
   * Document overlayroot setup on DietPi
