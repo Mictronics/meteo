@@ -173,8 +173,16 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state)
     return 0;
 }
 
+static void set_record_status(unsigned char status)
+{
+    pthread_mutex_lock(&lock_packetdata);
+    packet_data.record_status = status;
+    pthread_mutex_unlock(&lock_packetdata);
+}
+
 /**
  * Start recording. Runs on the main thread.
+ * record_status: 0 idle, 1 recording, 2 failed (cleared by the next start/stop).
  */
 static void start_recording(const t_start_cmd *start_cmd)
 {
@@ -208,6 +216,7 @@ static void start_recording(const t_start_cmd *start_cmd)
     if (mkdir(path, 0755) == -1 && errno != EEXIST)
     {
         lwsl_err("Error creating folder %s: %s\n", path, strerror(errno));
+        set_record_status(2);
         return;
     }
 
@@ -225,17 +234,22 @@ static void start_recording(const t_start_cmd *start_cmd)
     if (record_fp == NULL)
     {
         lwsl_err("Error creating log file: %s\n", strerror(errno));
+        set_record_status(2);
         return;
     }
 
     fputs("LOG_TIME;TEMP;HUM;PRESSURE;DIRECTION;WIND_TOTAL;WIND_LAT;MEAN_WIND_TOTAL;MEAN_WIND_LAT;GPS_EPOCH_RECORDED;TIME_MAWS_RECORDED;TOP_NUMBER\n", record_fp);
     fputs("HH:MM:SS;degC;%;mbar;deg;kt;kt;kt;kt;seconds;HH:MM:SS;#\n", record_fp);
-    fflush(record_fp);
-    fdatasync(fileno(record_fp));
+    if (fflush(record_fp) != 0 || fdatasync(fileno(record_fp)) != 0)
+    {
+        lwsl_err("Error writing log file header: %s\n", strerror(errno));
+        fclose(record_fp);
+        record_fp = NULL;
+        set_record_status(2);
+        return;
+    }
 
-    pthread_mutex_lock(&lock_packetdata);
-    packet_data.record_status = 1;
-    pthread_mutex_unlock(&lock_packetdata);
+    set_record_status(1);
 }
 
 /**
@@ -808,11 +822,16 @@ static void record_timer_cb(lws_sorted_usec_list_t *sul)
             (unsigned)p.maws_min,
             (unsigned)p.maws_sec,
             (unsigned)p.top_number);
-    fflush(record_fp);
     // Commit to flash every SYNC_EVERY rows: bounds data loss on power cut without wearing the SD card
     static unsigned rows;
-    if (++rows % SYNC_EVERY == 0)
-        fdatasync(fileno(record_fp));
+    if (ferror(record_fp) || fflush(record_fp) != 0 ||
+        (++rows % SYNC_EVERY == 0 && fdatasync(fileno(record_fp)) != 0))
+    {
+        lwsl_err("Error writing log file, recording stopped: %s\n", strerror(errno));
+        fclose(record_fp);
+        record_fp = NULL;
+        set_record_status(2);
+    }
 }
 
 /**

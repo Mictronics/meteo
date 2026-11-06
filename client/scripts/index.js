@@ -119,16 +119,18 @@ function UpdateGui(serverData) {
     tn.classList.remove('is-invalid');
   }
 
-  recordStatus = serverData.recordStatus;
-  if (recordStatus === 0) {
-    fn.disabled = false;
-    tn.disabled = false;
-    $('recordSpinner').classList.add('d-none');
-  } else {
-    fn.disabled = true;
-    tn.disabled = true;
-    $('recordSpinner').classList.remove('d-none');
+  // Record status: 0 idle, 1 recording, 2 failed (disk error)
+  const recording = serverData.recordStatus === 1;
+  if (serverData.recordStatus === 2 && recordStatus !== 2) {
+    showNoty('Recording failed! Check storage, no data is being saved.', 'error');
   }
+  recordStatus = serverData.recordStatus;
+  fn.disabled = recording;
+  tn.disabled = recording;
+  $('recordSpinner').classList.toggle('d-none', !recording);
+  $('recordLabel').textContent = ['Record', 'Stop', 'FAILED - retry'][recordStatus] || 'Record';
+  $('recordButton').classList.toggle('btn-danger', recordStatus !== 2);
+  $('recordButton').classList.toggle('btn-warning', recordStatus === 2);
 
   // Runway heading and elevation
   if (runwayElevation !== serverData.runwayElevation) {
@@ -209,7 +211,7 @@ function UpdateGui(serverData) {
 
 // Start/stop recording
 function OnRecordButtonClick(ev) {
-  if (recordStatus === 0) {
+  if (recordStatus !== 1) {
     const top = Number.parseInt($('topNumberInput').value, 10);
     serverCommunicationWorker.postMessage({
       cmd: 'start',
