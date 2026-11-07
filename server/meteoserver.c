@@ -655,8 +655,12 @@ static void *gps_read_thread(void *arg)
         packet_data.gps_status = (unsigned char)gpsdata.fix.status;
 #endif
         packet_data.gps_mode = (unsigned char)gpsdata.fix.mode;
-        packet_data.gps_satellites_visible = (unsigned char)gpsdata.satellites_visible;
-        packet_data.gps_satellites_used = (unsigned char)gpsdata.satellites_used;
+        // Only SKY messages carry counts; DOP-only SKY or TPV must not zero them.
+        if ((gpsdata.set & SATELLITE_SET) && gpsdata.satellites_visible > 0)
+        {
+            packet_data.gps_satellites_visible = (unsigned char)gpsdata.satellites_visible;
+            packet_data.gps_satellites_used = (unsigned char)gpsdata.satellites_used;
+        }
         packet_data.gps_hdop = finite_or_zero(gpsdata.dop.hdop);
         packet_data.gps_pdop = finite_or_zero(gpsdata.dop.pdop);
         packet_data.gps_lat = finite_or_zero(gpsdata.fix.latitude);
