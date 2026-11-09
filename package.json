@@ -1,6 +1,6 @@
 {
   "name": "meteo",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Visualization for Vaisalla weather station.",
   "author": {
     "name": "Michael Wolf",

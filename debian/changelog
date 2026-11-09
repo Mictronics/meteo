@@ -1,3 +1,12 @@
+meteo (1.4.0) unstable; urgency=medium
+
+  * client: add legend to windspeed chart
+  * client: sync flight number set by another client
+  * Warn when the server clock disagrees with GPS time
+  * server: keep GPS satellite counts when non-SKY gpsd messages arrive
+
+ -- Mictronics <github@mictronics.de>  Mon, 09 Nov 2026 16:59:00 +0100
+
 meteo (1.3.0) unstable; urgency=medium
 
   * client: make connection and failure warnings hard to miss
