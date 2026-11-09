@@ -103,7 +103,7 @@ function UpdateGui(serverData) {
   // Flight and top number
   const fn = $('flightNumberInput');
   const tn = $('topNumberInput');
-  if (flightNumber < 0) {
+  if (serverData.flightNumber > flightNumber) {
     fn.value = serverData.flightNumber;
     flightNumber = serverData.flightNumber;
   }
