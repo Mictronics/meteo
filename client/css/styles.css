@@ -48,6 +48,10 @@ d3fc-group.cartesian-chart > .plot-area {
   color: darkorange;
 }
 
+.legend {
+  font-size: x-small!important;
+}
+
 /* Colors match #window0dB/#window10dB/#window12dB above */
 .legend span::before {
   content: '';
@@ -57,7 +61,6 @@ d3fc-group.cartesian-chart > .plot-area {
   vertical-align: middle;
   border-top: 5px solid;
   border-radius: 3px;
-  font-size: x-small;
 }
 
 .legend-0dB::before {
