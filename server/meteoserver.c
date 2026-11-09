@@ -467,6 +467,7 @@ static int callback_broadcast(struct lws *wsi, enum lws_callback_reasons reason,
             break;
 
         pthread_mutex_lock(&lock_packetdata);
+        packet_data.local_time = (double)time(NULL); // system clock, lets the client detect an unsynced one
         memcpy(&out[LWS_PRE], &packet_data, sizeof(packet_data));
         pthread_mutex_unlock(&lock_packetdata);
 

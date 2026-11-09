@@ -19,10 +19,13 @@ const MAX_ELEVATION_FT = 29030;
 
 let flightNumber = -1;
 let topNumber = -1;
+const CLOCK_MAX_DIFF_SEC = 10; // tolerates chrony still slewing
 let recordStatus = -1;
 let mawsStatus = -1;
 let offlineNoty = null;
 let mawsNoty = null;
+let clockNoty = null;
+let clockBad = false;
 let runwayHeading = -1;
 let runwayElevation = -1;
 let hsiHeadingPending = false;
@@ -135,6 +138,16 @@ function UpdateGui(serverData) {
     $('mawsLabel').textContent = mawsStatus ? 'MAWS / GPS UTC' : 'MAWS NO DATA / GPS UTC';
     $('mawsLabel').classList.toggle('text-danger', !mawsStatus);
     $('mawsLabel').classList.toggle('text-black-50', !!mawsStatus);
+  }
+
+  // Server clock vs GPS: a wrong clock stores recordings under the wrong date
+  const badClock = hasGpsTime && Math.abs(serverData.gpsTime - serverData.localTime) > CLOCK_MAX_DIFF_SEC;
+  if (badClock !== clockBad) {
+    clockBad = badClock;
+    if (clockNoty) clockNoty.close();
+    clockNoty = badClock
+      ? showNoty(`Server clock is wrong (${gpsDate.toISOString().slice(0, 10)} per GPS)! Recordings get a wrong date.`, 'error')
+      : null;
   }
 
   // Record status: 0 idle, 1 recording, 2 failed (disk error)
