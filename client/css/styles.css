@@ -70,3 +70,16 @@ d3fc-group.cartesian-chart > .plot-area {
 .legend-12dB::before {
   color: green;
 }
+
+/* Colors match the windspeed chart series in charts.js */
+.legend-wind::before {
+  color: red;
+}
+
+.legend-cross::before {
+  color: blue;
+}
+
+.legend-limit::before {
+  border-top-style: dashed;
+}
