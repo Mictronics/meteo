@@ -57,6 +57,7 @@ d3fc-group.cartesian-chart > .plot-area {
   vertical-align: middle;
   border-top: 5px solid;
   border-radius: 3px;
+  font-size: x-small;
 }
 
 .legend-0dB::before {
