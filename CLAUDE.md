@@ -41,3 +41,19 @@ WebMeteo visualizes data from a Vaisala weather station (MAWS) for EASA acoustic
 - The server has no authentication and listens on all interfaces unless `-i` is given. This is deliberate: it runs on an isolated Wi-Fi access point where the Wi-Fi credentials are the access control, and any connected client may operate the UI. Keep security measures minimal; do not add token or Origin checks unless the deployment changes.
 - `record_status` is 0 idle, 1 recording, 2 failed (open/write error; cleared by the next start or stop). The client shows it on the Record button.
 - Recordings go to `/mnt/data/meteodata` (override with `-DRECORD_DIR=\"...\"` at compile time, handy for tests).
+
+## Setup scripts for the weather station (DietPi / Raspberry Pi 3)
+
+Two bash scripts in `tools/` fully set up a new weather station server (DietPi on Debian Trixie, Raspberry Pi 3, 64 GB SD card). They are one-time provisioning and not part of the Debian package. Their comments and messages are in English.
+
+- `tools/prepare-sdcard.sh` runs on the Linux PC against a freshly flashed, never booted DietPi card (`sudo tools/prepare-sdcard.sh /dev/sdX`). It leaves p2 unchanged and creates an ext4 data partition labelled `METEODATA` 16 GiB after the start of p2, extending to the end of the card. DietPi therefore only grows root up to that partition on first boot. It also copies `setup.sh` to the boot partition as `meteo-setup.sh`.
+- `tools/setup.sh` runs on the Pi as root (`sudo bash /boot/firmware/meteo-setup.sh`) and can be rerun as long as OverlayRoot is not yet active. Options: `--skip-overlay`, `--no-reboot`, `--no-ap`. Settings come from environment variables (`AP_SSID`, `AP_PASSPHRASE`, `AP_NET`, `MDNS_HOST`, `WLAN_IF`, `BUILD_USER` ...), see the script header. It mounts `METEODATA` at `/mnt/data` and installs `gpsd`, `chrony`, `lighttpd`, `busybox`, `git`, `overlayroot`, `pps-tools` and the build tools. It configures the USB GPS (`/dev/ttyACM0`, `USBAUTO=false`) and the PPS input on GPIO18 (`dtoverlay=pps-gpio`). `chrony` uses NMEA via gpsd SHM plus PPS, with no internet NTP and no NTP server for other devices. The repo is cloned to `/mnt/data/git/meteo`, built as a `.deb` and installed. Finally it enables OverlayRoot (`tmpfs:recurse=0`) and reboots.
+- `setup.sh` also sets up avahi (`weatherstation.local`) and a Wi-Fi access point (hostapd + dnsmasq, ifupdown, `wlan0` = 192.168.42.1). The Wi-Fi password is printed to the terminal only, never to the log (`sudo grep wpa_passphrase /etc/hostapd/hostapd.conf`).
+
+Important constraints:
+- After the setup the root filesystem is volatile. Make permanent changes (packages, `/etc/default/meteo`, configuration) only via `sudo overlayroot-chroot`. Only `/mnt/data` is permanently writable (`/mnt/data/meteodata`, chrony drift file, setup log).
+- The repo must stay on `/mnt/data`. Updates run via `tools/update.sh` as a normal user (`dietpi`, not root) with sudo, followed by a reboot.
+- The weather station (MAWS) is on `/dev/ttyUSB0` (the `meteoserver` default), the GPS on `/dev/ttyACM0`. gpsd must not autodetect `ttyUSB0`, hence `USBAUTO="false"`.
+- Emergency if the Pi does not boot: remove `auto_initramfs=1` from `config.txt` and `overlayroot=` from `cmdline.txt`.
+- `setup.sh` uses `update-initramfs -c` with fallback `-u`, so reruns work when an initramfs already exists. `install_nostart` (policy-rc.d) keeps hostapd/dnsmasq from starting during setup, which would cut the Wi-Fi/SSH connection.
+- The scripts were only checked with `bash -n` and ShellCheck, without hardware. Behavior changes should be verified on a test card (`findmnt /`, `ppstest /dev/pps0`, `chronyc sources -v`).
